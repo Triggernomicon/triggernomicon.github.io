@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018b";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018b";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018b";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018b";
+import { firebaseConfig } from "./config.js?v=20261018c";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018c";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018c";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018c";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -752,10 +752,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18b";
+const APP_VERSION = "2026.10.18c";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018b" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018c" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3772,7 +3772,7 @@ function startController(code, pid) {
       ${poolOpen ? `<div class="pool-add">${MCOL.map(c => `<button class="pool-chip" data-a="pool-add" data-c="${c}">${manaHtml(`{${c}}`)}</button>`).join("")}</div>` : ""}`;
   }
   // Plain mana abilities a permanent has ("{T}: Add {C}{C}", basic land types) → one-tap "tap for mana into the pool"
-  function plainMana(e) {
+  function plainMana(e, eid) {
     const o = String(e.o || lookupCard(e.n)?.o || "") + (e.gained?.length ? "\n" + e.gained.join("\n") : "");
     const out = [];
     const condOk = l => { const n = l.match(/[Aa]ctivate only if you control (\w+) or more lands/); if (n) return Object.values(me.bf || {}).filter(x => /\bLand\b/.test(x.t || "")).length >= ({ two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 }[n[1].toLowerCase()] || Number(n[1]) || 0);
@@ -3794,14 +3794,14 @@ function startController(code, pid) {
     { const pc = o.match(/^\{T\}: Add (\{[WUBRGC]\}) for each (\w+) counter on (?:this|it)[^.\n]*\./im); const n = pc ? e.c?.[pc[2].toLowerCase()] || 0 : 0; if (n) out.push(pc[1].repeat(n)); }
     o.split("\n").forEach(l => { const m = l.replace(/\([^)]*\)/g, "").trim().match(/^((?:\{[^}T]+\})+), \{T\}: Add (one mana of any color|(?:\{[WUBRGC]\})+(?:, (?:\{[WUBRGC]\})+)*(?:,? or (?:\{[WUBRGC]\})+)?)\.?$/i); if (m) (/any color/i.test(m[2]) ? ["any"] : m[2].split(/,? or |, /)).forEach(x => out.push(`${x}@${m[1]}`)); });
     // creatures that tap for mana because of other cards
-    if (/\bCreature\b/.test(e.t || "")) grantedCreatureMana(false, e.t, e).forEach(x => out.push(x));
+    grantedCreatureMana(false, e.t || lookupCard(e.n)?.t || "", e, eid).forEach(x => out.push(x));
     return [...new Set(out)];
   }
   // Cryptolith Rite / Enduring Vitality ("Creatures you control have …"), Jaheira ("Tokens you control have {T}: Add {G}"), Song of Freyalise chapters I-II
-  function grantedCreatureMana(isTok, t, ent) {
+  function grantedCreatureMana(isTok, t, ent, eid) {
     const out = [];
-    Object.values(me.bf || {}).forEach(a => grantedMana({ ...a, o: a.o || lookupCard(a.n)?.o }).forEach(g => {
-      const hit = g.who === "countered" ? /\bCreature\b/.test(t || "") && Object.values(ent?.c || {}).some(v => v > 0) : / and /.test(g.who) ? g.who.split(" and ").some(w => new RegExp(`\\b${w}`, "i").test(t || "")) : g.who === "tokens" ? isTok : g.who === "creatures" ? /\bCreature\b/.test(t || "") : g.who === "creature tokens" ? isTok && /\bCreature\b/.test(t || "") : new RegExp(`\\b${g.who.replace(/s$/, "")}`, "i").test(t || "");
+    Object.entries(me.bf || {}).forEach(([aid, a]) => grantedMana({ ...a, o: a.o || lookupCard(a.n)?.o }).forEach(g => {
+      const hit = g.who === "permanents" ? !(g.other && (a === ent || (eid && aid === eid))) : g.who === "countered" ? /\bCreature\b/.test(t || "") && Object.values(ent?.c || {}).some(v => v > 0) : / and /.test(g.who) ? g.who.split(" and ").some(w => new RegExp(`\\b${w}`, "i").test(t || "")) : g.who === "tokens" ? isTok : g.who === "creatures" ? /\bCreature\b/.test(t || "") : g.who === "creature tokens" ? isTok && /\bCreature\b/.test(t || "") : new RegExp(`\\b${g.who.replace(/s$/, "")}`, "i").test(t || "");
       if (!hit) return;
       const m = g.text.match(/add ((?:\{[WUBRGC]\})+)/i); out.push(m ? m[1] : /any color/i.test(g.text) ? "any" : null);
     }));
@@ -3952,7 +3952,7 @@ function startController(code, pid) {
   function manaCrew() {
     const grants = Object.values(me.bf || {}).flatMap(a => grantedMana({ ...a, o: a.o || lookupCard(a.n)?.o }).map(g => ({ ...g, src: dispName(a) })));
     if (!grants.length) return null;
-    const covered = (isTok, t) => grants.some(g => g.who === "tokens" ? isTok : g.who === "creatures" ? /\bCreature\b/.test(t) : g.who === "creature tokens" ? isTok && /\bCreature\b/.test(t) : new RegExp(`\\b${g.who.replace(/s$/, "")}`, "i").test(t));
+    const covered = (isTok, t) => grants.some(g => g.who === "permanents" ? isTok || /\bCreature\b/.test(t) : g.who === "tokens" ? isTok : g.who === "creatures" ? /\bCreature\b/.test(t) : g.who === "creature tokens" ? isTok && /\bCreature\b/.test(t) : new RegExp(`\\b${g.who.replace(/s$/, "")}`, "i").test(t));
     let ready = 0, sick = 0;
     Object.entries(me.bf || {}).forEach(([id, e]) => {
       if (!covered(false, e.t || "") || e.tap) return;
@@ -7160,7 +7160,7 @@ function startController(code, pid) {
         ${(() => { const cc = lookupCard(e.n) && activationCondition(lookupCard(e.n)); if (!cc) return "";
           const have = countTypes(me, [cc.type]); const ok = have >= cc.n;
           return `<span class="cond ${ok ? "on" : "off"}" title="Activate only if you control ${cc.n} ${cc.type}${cc.n > 1 ? "s" : ""}">${ok ? "✓" : "✗"} ${have}/${cc.n} ${esc(cc.type)}${cc.n > 1 ? "s" : ""}</span>`; })()}
-        ${trackMana && !e.tap && !sickNow ? plainMana(e).map(sym => { const [out0, pay] = sym.split("@"); const out = out0.replace(/!\d+$|~\d+|\^h|\+c:\w+/g, ""); return `<button class="btn small mana-tap" data-a="tap-mana" data-id="${id}" data-s="${sym}" title="Tap for mana (into your mana pool)${pay ? `; pays ${pay} from your pool` : ""}">⚡${pay ? `${manaHtml(pay)}→` : ""}${out === "any" ? "any" : manaHtml(out)}${/!\d+$/.test(out0) ? "💥" : ""}${/~(\d+)/.test(out0) ? `❤${out0.match(/~(\d+)/)[1]}` : ""}</button>`; }).join("") : ""}
+        ${trackMana && !e.tap && !sickNow ? plainMana(e, id).map(sym => { const [out0, pay] = sym.split("@"); const out = out0.replace(/!\d+$|~\d+|\^h|\+c:\w+/g, ""); return `<button class="btn small mana-tap" data-a="tap-mana" data-id="${id}" data-s="${sym}" title="Tap for mana (into your mana pool)${pay ? `; pays ${pay} from your pool` : ""}">⚡${pay ? `${manaHtml(pay)}→` : ""}${out === "any" ? "any" : manaHtml(out)}${/!\d+$/.test(out0) ? "💥" : ""}${/~(\d+)/.test(out0) ? `❤${out0.match(/~(\d+)/)[1]}` : ""}</button>`; }).join("") : ""}
         <button class="btn small ${e.tap ? "on" : ""} ${sickNow && !e.tap ? "sick-btn" : ""}" data-a="tap" data-id="${id}" ${sickNow && !e.tap ? `data-sick="1" title="Summoning sick"` : ""}>${e.tap ? "Tapped" : sickNow ? "💤 Tap" : "Tap"}</button>
         ${/\bCreature\b/.test(e.t || "") && !e.tap ? `<button class="btn small" data-a="attack" data-id="${id}">⚔ Attack</button>` : ""}
         ${!open && (() => { const c = { ...e, o: e.o || lookupCard(e.n)?.o, t: e.t || lookupCard(e.n)?.t }; return equipCost(c) || enchantType(c); })() ? `<button class="btn small" data-a="expand" data-id="${id}">📎 ${/\bEquipment\b/.test(e.t || "") ? "Equip" : "Attach"}</button>` : ""}

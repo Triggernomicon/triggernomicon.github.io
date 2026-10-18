@@ -2062,6 +2062,9 @@ export function grantedMana(card) {
   String(card?.o || "").split("\n").forEach(l => {
     const m = l.trim().match(/^(tokens|creatures|creature tokens|[a-z]+s) you control (?:have|gain) "(\{T\}: add [^"]+?)\.?"\.?$/i);
     if (m) out.push({ who: m[1].toLowerCase(), text: m[2] });
+    // A Realm Reborn: "Other permanents you control have "{T}: Add one mana of any color.""
+    const mp = !m && l.trim().match(/^(other )?permanents you control (?:have|gain) "(\{T\}: add [^"]+?)\.?"\.?$/i);
+    if (mp) out.push({ who: "permanents", other: !!mp[1], text: mp[2] });
     const m2 = !m && l.trim().match(/^each (creature|[a-z]+(?: and [a-z]+)?) you control( with a counter on it)? has "(\{T\}: add [^"]+?)\.?"\.?$/i);
     if (m2) out.push({ who: m2[2] ? "countered" : m2[1].toLowerCase(), text: m2[3] });
   });
@@ -2381,7 +2384,7 @@ export function detectCombos(p, lookup) {
     if (fc && rec) out.push({ key: `named:Food Chain+${rec}`, name: `Food Chain + ${rec}`, pieces: ["Food Chain", rec], win: false, kind: "tokens", desc: `Exile ${rec} to Food Chain for mana, cast it again from exile with that mana, and net one extra mana each loop: infinite mana for creature spells.` }); }
   // Squirrel Girl-style engine: "Create X tokens, where X is the number of <type> you control" + every creature taps for mana + haste
   { const grow = ents.map(x => ({ x, m: x.o.match(/^(?:[^\n{]*? — )?\{([^\n:]+?)\}: create x 1\/1 [a-z ]*?([A-Z][a-z]+) creature tokens, where x is the number of \2s you control/im) })).find(y => y.m);
-    const manaAll = pick(/^(?:creatures|tokens|creature tokens) you control have "\{T\}: Add/im)[0] || ents.find(x => /^Song of Freyalise$/.test(x.n) && (x.e.c?.lore || 1) < 3);
+    const manaAll = pick(/^(?:creatures|tokens|creature tokens|(?:other )?permanents) you control have "\{T\}: Add/im)[0] || ents.find(x => /^Song of Freyalise$/.test(x.n) && (x.e.c?.lore || 1) < 3);
     const haste = pick(/^(?:all creatures|creatures you control) have haste/im)[0];
     if (grow && manaAll && haste) {
       const typ = grow.m[2], cost = manaValue(`{${grow.m[1]}}`) || 4;
