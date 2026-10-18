@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018c";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018c";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018c";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018c";
+import { firebaseConfig } from "./config.js?v=20261018d";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018d";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018d";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018d";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -692,7 +692,8 @@ async function nextTurn(code, before = null, tbAt = null) {
     if (!isOut(c)) { next = c; break; }
   }
   if (!next) return;
-  const xt = room.extraTurn;
+  const xt0 = room.extraTurn; // an extra turn already taken hands over to the next one queued
+  const xt = xt0?.taken ? (xt0.queue?.length ? { ...xt0.queue[0], queue: xt0.queue.slice(1) } : null) : xt0;
   const skipX = xt && all.some(p => p.id !== xt.pid && !isOut(p) && Object.values(p.bf || {}).some(e => /if an opponent would begin an extra turn, that player skips that turn instead/i.test(e.o || "")));
   if (xt && !xt.taken && xt.pid === room.turn && !skipX && !isOut(all.find(p => p.id === xt.pid) || {})) next = all.find(p => p.id === xt.pid);
   const upd = { turn: next.id, turnNo: (room.turnNo || 0) + 1 };
@@ -703,7 +704,7 @@ async function nextTurn(code, before = null, tbAt = null) {
     upd.round = (room.round || 1) + (wrapped ? 1 : 0); if (room.firstSeat == null) upd.firstSeat = fs;
     if (wrapped) setTimeout(() => logTo(code, `— Round ${upd.round} —`), 0);
   }
-  if (xt) upd.extraTurn = !xt.taken && !skipX && next.id === xt.pid && xt.pid === room.turn ? { ...xt, taken: true, turnNo: (room.turnNo || 0) + 1 } : (xt.queue?.length ? { ...xt.queue[0], queue: xt.queue.slice(1) } : null);
+  if (xt0) upd.extraTurn = !xt ? null : !xt.taken && !skipX && next.id === xt.pid && xt.pid === room.turn ? { ...xt, taken: true, turnNo: (room.turnNo || 0) + 1 } : (xt.queue?.length ? { ...xt.queue[0], queue: xt.queue.slice(1) } : null);
   if (room.airLock && room.airLock.by === next.id) upd.airLock = null;
   if (room.turn) upd.turnBack = { at: tbAt || Date.now(), by: room.turn, byName: room.players?.[room.turn]?.name || "the last player", snap: tbSnap };
   all.forEach(p => Object.entries(p.effects || {}).forEach(([k, ef]) => {
@@ -752,10 +753,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18c";
+const APP_VERSION = "2026.10.18d";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018c" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018d" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -2738,7 +2739,10 @@ function startController(code, pid) {
     let conflicts = 0;
     mutate(p => { [...st.segs].reverse().forEach(g => { conflicts += patchState(p, g.after, g.before); }); tidyTokens(p); if (st.perm && st.card && !st.cmd) st.gyId = toZone(p, st.card, "gy"); });
     st.segs.forEach(g => shiftOppLife(g.loss, +1));
-    logTo(code, `🚫 ${me.name}'s ${st.name} was countered by ${ctr.byName}'s ${ctr.src}`);
+    { const xt = room.extraTurn, list = xt ? [{ ...xt, queue: undefined }, ...(xt.queue || [])] : [];
+      const i = list.findIndex(x => !x.taken && x.pid === pid && x.src === st.name);
+      if (i >= 0) { st.xtDropped = list[i]; const rest = list.filter((_, j) => j !== i); update(ref(db, `rooms/${code}`), { extraTurn: rest.length ? { ...rest[0], queue: rest.slice(1) } : null }); logTo(code, `⏭ ${st.name} didn't resolve: no extra turn from it`); } }
+    logTo(code, `🚫 ${me.name}'s ${st.name} was ${ctr.bounced ? "returned to their hand" : "countered"} by ${ctr.byName}'s ${ctr.src}`);
     if (used || conflicts) reminders.push({ id: newId(), src: st.name, text: "Countered after you'd already acted on it.", times: 1,
       note: conflicts ? "Most of it was reversed, but some of it was changed again since. Check the board." : "The board was reversed. Put back any real cards it moved (searched, drew), and undo anything it did to other players by hand." });
     if (st.cmd) reminders.push({ id: newId(), src: st.name, text: "Your commander was countered. Move it to the command zone (or graveyard). Its tax still counts.", times: 1 });
@@ -2753,6 +2757,7 @@ function startController(code, pid) {
     st.segs.forEach(g => shiftOppLife(g.loss, -1));
     reminders.push(...(st.removedRems || []));
     st.removedRems = null;
+    if (st.xtDropped) { const nx = st.xtDropped; st.xtDropped = null; update(ref(db, `rooms/${code}`), { extraTurn: room.extraTurn ? { ...room.extraTurn, queue: [...(room.extraTurn.queue || []), nx] } : nx }); }
     logTo(code, `↩ ${me.name}'s ${st.name} resolves after all (its counterspell was countered)`);
     if (st.counters && st.counterInfo) update(ref(db, `rooms/${code}/casts/${st.counters}`), { countered: { ...st.counterInfo, at: Date.now() } });
     render();
@@ -2835,7 +2840,7 @@ function startController(code, pid) {
     const land = /\bLand\b/.test(card.t || "");
     const castsBefore = Object.values(room.casts || {}).filter(c => (c.turnNo || 0) === (room.turnNo || 0)).length; // for Storm
     if (!land && !opts.via && !opts.copy && (/^Convoke\b/m.test(card.o || "") || (/\bArtifact\b/.test(card.t || "") && Object.values(me.bf || {}).some(x => /artifact spells you cast have convoke/i.test(x.o || lookupCard(x.n)?.o || ""))))) reminders.push({ id: newId(), src: dispName(card), text: "Convoke: tap creatures to help pay (each pays {1} or one mana of its color).", times: 1, convoke: true });
-    const castKey = !land && !opts.via ? broadcastCast(card) : null;
+    const castKey = !land && !opts.via && (!opts.copy || opts.castCopy) ? broadcastCast(card) : null; // a copy that isn't cast (Narset's Reversal, Twincast) isn't a cast: no storm count
     if (castKey && !opts.copy) {
       const t = room?.turnNo || 0, spent = opts.free ? 0 : manaValue(costOf(card)), prev = me.spentT?.t === t ? me.spentT.n || 0 : 0;
       if (spent > 0) { mutate(p => { p.spentT = { t, n: prev + spent }; }, true); if (Object.values(me.bf || {}).some(x => /whenever you expend \d+/i.test(x.o || lookupCard(x.n)?.o || ""))) setTimeout(() => act([{ type: "expend", prev, n: prev + spent }]), 0); }
@@ -2876,8 +2881,8 @@ function startController(code, pid) {
       if (/each player discards their hand, then draws cards equal to the greatest number of cards a player discarded this way/i.test(card.o || "") && !opts.copy) {
         const v = prompt(`${dispName(card)}: the biggest hand at the table had how many cards? (everyone discards, then draws that many)`, "7");
         const n = Math.max(0, Math.floor(Number(v) || 0));
-        seated(room).filter(o => !isOut(o) && o.id !== pid).forEach(o => sendNote(o.id, { text: `${me.name}'s ${dispName(card)}: discard your hand, then draw ${n} card${n === 1 ? "" : "s"}.`, src: dispName(card) }));
-        reminders.push({ id: newId(), src: dispName(card), text: `Discard your hand, then draw ${n} card${n === 1 ? "" : "s"} (everyone does).`, times: 1 });
+        seated(room).filter(o => !isOut(o) && o.id !== pid).forEach(o => sendNote(o.id, { text: `${me.name}'s ${dispName(card)}: discard your hand, then draw ${n} card${n === 1 ? "" : "s"}.`, src: dispName(card), drawN: n }));
+        if (n) reminders.push({ id: newId(), src: dispName(card), text: `Discard your hand, then draw ${n} card${n === 1 ? "" : "s"} (everyone does).`, times: 1, drawN: n });
         logTo(code, `🌀 ${me.name}'s ${dispName(card)}: everyone discards their hand and draws ${n}`);
       }
       if (/create a token that's a copy of target artifact or creature you control, except it's an artifact in addition to its other types\. it gains haste until end of turn\. sacrifice it at the beginning of the next end step/i.test(card.o || "")) reminders.push({ id: newId(), src: dispName(card), text: "Copy which artifact or creature you control?", times: 1, dupPick: true });
@@ -2886,11 +2891,12 @@ function startController(code, pid) {
       const chancy = /\bflips? (?:a coin|\w+ coins)\b|\bsecretly (?:chooses?|votes?)\b|\bchooses? (?:fame or fortune|silence or snitch)\b/i.test(String(card.o || "").split(" // ")[0]);
       const xtIf = /(?:^|\.\s+)if [^.]*?, (?:you )?take an extra turn after this one/im.test(String(card.o || "")) && !/\bif you do\b/i.test((String(card.o || "").match(/[^.]*take an extra turn after this one/i) || [""])[0]);
       if (xtIf && !opts.copy) reminders.push({ id: newId(), src: dispName(card), text: String(card.o).split(" // ")[0].replace(/\([^)]*\)/g, "").split("\n").filter(l => !/^(prowl|kicker|flashback|buyback|bargain|convoke|delve|devoid)\b/i.test(l.trim())).join(" ").replace(/\s+/g, " ").trim(), times: 1 });
-      if (/take an extra turn after this one/i.test(card.o || "") && !opts.copy && !chancy && !xtIf) {
+      // "Take an extra turn after this one" / Time Warp's "Target player takes …" (the caster, nearly always). A copy (Narset's Reversal, Isochron Scepter) gives a turn too
+      if (/(?:^|[.:—•]\s*|\n)(?:take|target player takes) an extra turn after this one/i.test(card.o || "") && !chancy && !xtIf) {
         const lose = /at the beginning of that turn's end step, you lose the game/i.test(card.o || "");
         const nx = { pid, name: me.name, src: dispName(card), lose, taken: false };
-        update(ref(db, `rooms/${code}`), { extraTurn: room.extraTurn && !room.extraTurn.taken ? { ...room.extraTurn, queue: [...(room.extraTurn.queue || []), nx] } : nx });
-        logTo(code, `⏭ ${me.name}'s ${dispName(card)}: ${me.name} takes an extra turn after this one${lose ? " (and loses the game at that turn's end step)" : ""}`);
+        update(ref(db, `rooms/${code}`), { extraTurn: room.extraTurn ? { ...room.extraTurn, queue: [...(room.extraTurn.queue || []), nx] } : nx });
+        logTo(code, `⏭ ${me.name}'s ${dispName(card)}${opts.copy ? " (copy)" : ""}: ${me.name} takes an extra turn after this one${/target player takes/i.test(card.o || "") ? " (target: themself; if they targeted someone else, fix the turn order by hand)" : ""}${lose ? " (and loses the game at that turn's end step)" : ""}`);
       }
       { const rf = (card.o || "").match(/^add ((?:\{[WUBRGC]\})+), then add (\{[WUBRGC]\}) for each card named ([^.]+?) in each graveyard\.?$/im);
         if (rf) { const k = Math.max(0, seated(room).reduce((a, o) => a + Object.values(o.gy || {}).filter(g => g.n === rf[3]).length, 0) - (opts.copy || card.n !== rf[3] ? 0 : 1)); poolAdd(rf[1] + rf[2].repeat(k), dispName(card)); logTo(code, `${me.name}'s ${dispName(card)}: ${rf[1]}${rf[2].repeat(k)} (${k} in graveyards)`); } }
@@ -3849,7 +3855,7 @@ function startController(code, pid) {
   // When I cast: use up a rider that applies to this spell
   // ----- Infinite combos on my board -----
   let combosSeen = new Set();
-  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n)) : []; }
+  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { hand: dig?.on ? [...dig.hand] : [], cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
   function announceCombos() {
     const list = myCombos(), keys = new Set(list.map(c => c.key));
     list.filter(c => !combosSeen.has(c.key)).forEach(c => { logTo(code, `♾ ${me.name} has an infinite combo: ${c.name}${c.win ? " — that wins the game" : ""}`); toast(`♾ Infinite combo: ${c.name}`); });
@@ -4968,7 +4974,7 @@ function startController(code, pid) {
         <button class="btn small" data-a="note-answer" data-n="${nid}" data-v="no">${esc(n.no)}</button></div>
     </div>` : `<div class="gift-box">
       <div>🎁 <b>${esc(n.from)}</b>${n.src ? ` (${esc(n.src)})` : ""}: ${esc(n.text)}</div>${digExtras(n.text, `data-nt="${nid}"`, "n" + nid)}
-      <div class="row">${n.token ? `<button class="btn small primary" data-a="note-take" data-n="${nid}">Take ${esc(n.token)}${n.tapped ? " (tapped)" : ""}</button>` : ""}
+      <div class="row">${n.drawN && !dig?.on ? `<button class="btn small primary" data-a="note-drew" data-n="${nid}" title="Record the draws so draw triggers (yours and the table's) fire">🂠 Drew ${n.drawN}</button>` : ""}${n.token ? `<button class="btn small primary" data-a="note-take" data-n="${nid}">Take ${esc(n.token)}${n.tapped ? " (tapped)" : ""}</button>` : ""}
         <button class="btn small ${n.token ? "" : "primary"}" data-a="note-done" data-n="${nid}">${n.token ? "Dismiss" : "Done"}</button></div>
     </div>`).join("");
   }
@@ -8758,7 +8764,7 @@ function startController(code, pid) {
       case "wheel-go": {
         const r = reminders.find(x => x.id === b.dataset.id), f = r?.wheelAll; if (!f) break;
         reminders = reminders.filter(x => x !== r);
-        seated(room).filter(o => !isOut(o) && o.id !== pid).forEach(o => sendNote(o.id, { text: `${me.name}'s ${r.src}: ${f.may ? `you may discard your hand and draw ${f.n} cards` : `discard your hand, then draw ${f.n} cards`}.`, src: r.src }));
+        seated(room).filter(o => !isOut(o) && o.id !== pid).forEach(o => sendNote(o.id, { text: `${me.name}'s ${r.src}: ${f.may ? `you may discard your hand and draw ${f.n} cards` : `discard your hand, then draw ${f.n} cards`}.`, src: r.src, drawN: f.n }));
         reminders.push({ id: newId(), src: r.src, text: `${f.may ? "You may discard your hand and draw" : "Discard your hand, then draw"} ${f.n} cards.`, times: 1, drawN: f.n });
         logTo(code, `🌀 ${me.name}'s ${r.src}: everyone ${f.may ? "may discard their hand and draw" : "discards their hand and draws"} ${f.n}`);
         render(); break;
@@ -9124,6 +9130,11 @@ function startController(code, pid) {
         reminders = reminders.filter(x => x.id !== r.id);
         render();
         break;
+      }
+      case "note-drew": { // another player's wheel (Windfall): record my draws so Psychosis/Scrawling Crawler and friends see them
+        const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
+        update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
+        broadcastDraw(Number(n.drawN) || 0, n.src || ""); render(); break;
       }
       case "draw-go": {
         const r = reminders.find(x => x.id === b.dataset.id);

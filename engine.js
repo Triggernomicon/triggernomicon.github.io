@@ -2356,7 +2356,7 @@ const NAMED_COMBOS = [
   { all: ["Gravecrawler", "Phyrexian Altar"], needZombie: true, win: false, kind: "loop", desc: "Sacrifice Gravecrawler for {B}, recast it from your graveyard: infinite death and enters triggers (needs another Zombie)." },
   ...["Zealous Conscripts", "Pestermite", "Deceiver Exarch", "Village Bell-Ringer", "Restoration Angel", "Felidar Guardian"].map(x => ({ all: ["Kiki-Jiki, Mirror Breaker", x], win: false, kind: "tokens", tokenOf: x, desc: `Kiki-Jiki copies ${x}, the copy untaps Kiki-Jiki: infinite hasty ${x} tokens.` })),
 ];
-export function detectCombos(p, lookup) {
+export function detectCombos(p, lookup, ctx = {}) {
   const ents = Object.entries(p.bf || {}).map(([id, e]) => ({ id, e, n: e.n, o: String(lookup(e.n)?.o || e.o || ""), t: e.t || lookup(e.n)?.t || "" }));
   const has = n => ents.find(x => x.n === n);
   const pick = re => ents.filter(x => re.test(x.o));
@@ -2418,6 +2418,21 @@ export function detectCombos(p, lookup) {
     if (sc) { const mana = ents.filter(x => !/\bLand\b/.test(x.t) && x.id !== sc.id).reduce((a, x) => { const m = x.o.match(/^\{T\}: Add ((?:\{[WUBRGC]\})+)/m); return a + (m ? (m[1].match(/\{/g) || []).length : /^\{T\}: Add one mana of any (?:color|type)/im.test(x.o) ? 1 : 0); }, 0);
       if (mana >= 3) out.push({ key: "named:Isochron+Reversal", name: "Isochron Scepter + Dramatic Reversal", pieces: ["Isochron Scepter", "Dramatic Reversal"], win: false, kind: "castLoop", spell: "Dramatic Reversal", fuelSac: null, dmg: 0,
         desc: `Your nonland permanents make ${mana} mana; Scepter's {2} casts Dramatic Reversal, which untaps them all: infinite mana, and each loop is an instant cast (prowess, magecraft, storm).` }); } }
+  // Cards known to be in hand (digital hand) or cast by me this turn: some loops need a spell, not a permanent
+  const handOrCast = n => (ctx.hand || []).includes(n) || (ctx.cast || []).includes(n);
+  // Storm-Kiln Artist + Haze of Rage: buyback Haze with 3+ spells before it makes 4+ Treasures, enough to cast it again
+  { const kiln = pick(/whenever you cast or copy an instant or sorcery spell, create a treasure token/i)[0];
+    if (kiln && handOrCast("Haze of Rage")) out.push({ key: `named:${kiln.n}+Haze of Rage`, name: `${kiln.n} + Haze of Rage`, pieces: [kiln.n, "Haze of Rage"], win: false, kind: "info",
+      desc: `With 3 or more spells cast before it this turn, Haze of Rage with buyback ({3}{R}) makes a Treasure for itself and each storm copy (4+), which pays for the next cast, and it returns to your hand: infinite Treasures, storm count and +1/+0 for your creatures.` }); }
+  // Isochron Scepter (Narset's Reversal) + an extra-turn spell: copy it, the original returns to hand, every turn
+  { const sc = ents.find(x => x.n === "Isochron Scepter" && [x.e.imprint, ...(x.e.imprints || [])].includes("Narset's Reversal"));
+    const xt = sc && [...(ctx.hand || []), ...(ctx.cast || [])].find(n => { const c = lookup(n); return /\b(Instant|Sorcery)\b/.test(c?.t || "") && /(?:^|\n|[.:]\s*)(?:take|target player takes) an extra turn after this one/i.test(c?.o || ""); });
+    if (xt) out.push({ key: `named:Isochron Scepter+Narset's Reversal+${xt}`, name: `Isochron Scepter (Narset's Reversal) + ${xt}`, pieces: ["Isochron Scepter", "Narset's Reversal", xt], win: false, kind: "info",
+      desc: `Cast ${xt}, then (holding priority) pay {2} and tap Scepter: the Narset's Reversal copy copies ${xt} and returns it to your hand. One extra turn each turn, and you cast ${xt} again: infinite turns.` }); }
+  // Underworld Breach + Lotus Petal + Brain Freeze: each Petal escape is a free spell (storm +1); Brain Freeze copies at yourself refill the graveyard
+  { const ub = has("Underworld Breach"), lp = has("Lotus Petal"), bfz = Object.values(p.gy || {}).some(c => c.n === "Brain Freeze") || handOrCast("Brain Freeze") || (ctx.hand || []).includes("Brain Freeze");
+    if (ub && lp && bfz) out.push({ key: "named:Underworld Breach+Lotus Petal+Brain Freeze", name: "Underworld Breach + Lotus Petal + Brain Freeze", pieces: ["Underworld Breach", "Lotus Petal", "Brain Freeze"], win: false, kind: "info",
+      desc: "Tap and sacrifice Lotus Petal, escape it back (exile 3 other graveyard cards): +1 storm each time. Cast Brain Freeze (from hand, or escape it too): point two copies at yourself to refill your graveyard (mill 3 each), the rest at an opponent. Repeat until they're milled out. Breach is sacrificed at the end step." }); }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;
