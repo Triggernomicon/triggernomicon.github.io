@@ -77,11 +77,11 @@ label input { display: block; width: 100%; margin-top: 6px; }
 .tome { color: var(--accent); flex: none; display: block; }
 .tome .emb { color: var(--slate); } /* the dial and spark on the cover take the tagline color */
 .home-brand { display: flex; flex-direction: column; align-items: center; text-align: center; margin: 4px 0 22px; }
-.home-brand .tome { width: 128px; height: auto; margin-bottom: 14px; }
+.home-brand .tome { width: 104px; height: auto; margin-bottom: 10px; }
 .home h1 { font-size: min(32px, calc((100vw - 44px) / 12.8)); line-height: 1; margin: 0; }
 .home-brand .sub { font-family: var(--font-heading); font-weight: 700; color: var(--slate); text-transform: uppercase; letter-spacing: .14em; font-size: .9rem; margin: 12px 0 0; }
 .brand { display: flex; align-items: center; gap: .45em; font-size: clamp(16px, 1.8vw, 30px); }
-.brand .tome { width: 2.3em; height: auto; }
+.brand .tome { width: 2.4em; height: auto; }
 .brand-name { display: block; font-size: 1em; line-height: 1; }
 .brand-tag { display: block; font-family: var(--font-heading); font-weight: 700; font-size: .42em; color: var(--slate); text-transform: uppercase; letter-spacing: .14em; margin-top: 5px; }
 .fan-note { font-size: .7rem; line-height: 1.45; color: var(--muted); opacity: .75; text-align: center; margin: 6px 4px 0; }
