@@ -132,7 +132,7 @@ export function parseRemoval(text) {
 export function parsePunisher(text, cardName) {
   let m = text.match(/^(.*?)\s*unless that player pays ((?:\{[^}]+\})+)(?:, where x is ([^.]+))?\.?$/i);
   if (m) return { xIs: m[3] || "", ask: `Pay ${m[2]}`, askNo: "Don't pay", elseText: m[1].replace(/^you may /i, "").trim(), elseEffs: parseEffects(m[1], cardName), doText: "", doEffs: [] };
-  m = text.match(/^that player may ([^.]+)\.\s*(?:if (?:they|that player|he or she) (do|does|don't|doesn't|do not|does not)\b,?\s*([^.]+)\.?)?\s*(?:if (?:they|that player) (do|does|don't|doesn't|do not|does not)\b,?\s*([^.]+)\.?)?/i);
+  m = text.match(/^that player may ([^.]+)\.\s*(?:if (?:they|that player|the player|he or she) (do|does|don't|doesn't|do not|does not)\b,?\s*([^.]+)\.?)?\s*(?:if (?:they|that player|the player) (do|does|don't|doesn't|do not|does not)\b,?\s*([^.]+)\.?)?/i);
   if (!m) return null;
   const out = { ask: m[1].replace(/^\w/, x => x.toUpperCase()), askNo: "Don't", elseText: "", elseEffs: [], doText: "", doEffs: [] };
   [[m[2], m[3]], [m[4], m[5]]].forEach(([w, t]) => {
@@ -2456,6 +2456,16 @@ export function detectCombos(p, lookup, ctx = {}) {
       out.push({ key: `named:Underworld Breach+${lp.n}+Brain Freeze`, name: `Underworld Breach + ${lp.n} + Brain Freeze`, pieces: ["Underworld Breach", lp.n, "Brain Freeze"], win: false, kind: "info",
       desc: led ? "Discard your hand and sacrifice Lion's Eye Diamond for three mana of one color, then escape it back (exile 3 other graveyard cards): +1 storm and +3 mana each time. Escape Brain Freeze ({1}{U}): one copy at yourself refills your graveyard, the rest mill an opponent. Repeat until they're milled out. Breach is sacrificed at the end step."
         : "Tap and sacrifice Lotus Petal, escape it back (exile 3 other graveyard cards): +1 storm each time. Cast Brain Freeze (from hand, or escape it too): point two copies at yourself to refill your graveyard (mill 3 each), the rest at an opponent. Repeat until they're milled out. Breach is sacrificed at the end step." }); } }
+  // Underworld Breach + a wheel in the graveyard (Wheel of Fortune, Windfall) + Smothering Tithe or Jeska's Will: every escaped wheel pays for the next
+  { const ub = has("Underworld Breach"), zone = [...Object.values(p.gy || {}).map(c => c.n), ...(ctx.hand || [])]; // escape works from the graveyard (a wheel in hand gets there after one cast)
+    const wheel = zone.find(n => /each player discards their hand, then draws (?:seven cards|cards equal to the greatest number of cards a player discarded this way)/i.test(lookup(n)?.o || ""));
+    const tithe = pick(/whenever an opponent draws a card, that player may pay \{2\}\. if the player doesn't, you create a treasure token/i)[0];
+    const jeska = zone.find(n => /add \{R\} for each card in target opponent's hand/i.test(lookup(n)?.o || ""));
+    if (ub && wheel && tithe) out.push({ key: `named:Underworld Breach+${tithe.n}+${wheel}`, name: `Underworld Breach + ${tithe.n} + ${wheel}`, pieces: ["Underworld Breach", tithe.n, wheel], win: false, kind: "info",
+      desc: `Escape ${wheel} (its mana cost + exile 3 other graveyard cards): every card an opponent draws is a ${tithe.n} trigger, and each one they don't pay {2} for is a Treasure. Opponents who can't pay hand you enough Treasures to escape ${wheel} again: as many wheels as your graveyard allows. Breach is sacrificed at the end step.` });
+    if (ub && wheel && jeska) out.push({ key: `named:Underworld Breach+${wheel}+${jeska}`, name: `Underworld Breach + ${wheel} + ${jeska}`, pieces: ["Underworld Breach", wheel, jeska], win: false, kind: "info",
+      desc: `Escape ${jeska} ({2}{R}) for {R} per card in an opponent's hand (7 after a wheel), then escape ${wheel} ({2}{R}) to refill everyone's hand. Each pair nets mana, storm and magecraft triggers; it runs until your graveyard can't pay the escape costs. Breach is sacrificed at the end step.` });
+  }
   // Underworld Breach + Grinding Station + a 0-cost artifact: sacrifice it to Station (mill 3), escape it (exile 3), it enters and untaps Station
   { const ub = has("Underworld Breach"), gs = ents.find(x => /^\{T\}, Sacrifice an artifact: Target player mills (?:three|\d+) cards?/im.test(x.o) && /whenever an artifact enters, you may untap this/i.test(x.o));
     const zero = gs && [...ents.filter(x => x.id !== gs.id), ...Object.values(p.gy || {}).map(c => ({ n: c.n, t: c.t || lookup(c.n)?.t || "" }))].find(x => /\bArtifact\b/.test(x.t || lookup(x.n)?.t || "") && !/\bLand\b/.test(x.t || lookup(x.n)?.t || "") && x.n !== gs.n && manaValue(String(lookup(x.n)?.m ?? "")) === 0 && lookup(x.n)?.m != null);

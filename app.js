@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018e";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018e";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018e";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018e";
+import { firebaseConfig } from "./config.js?v=20261018f";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018f";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018f";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018f";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -753,10 +753,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18e";
+const APP_VERSION = "2026.10.18f";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018e" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018f" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -4970,6 +4970,11 @@ function startController(code, pid) {
       ${n.note ? `<div class="mini">${esc(n.note)}</div>` : ""}
       <div class="row">${(n.dies || []).filter(d => d.kind === "bf" ? me.bf?.[d.id] : me.tokens?.[d.id]?.count > 0).map(d => d.kind === "bf" ? `<button class="btn small" data-a="move" data-id="${esc(d.id)}" data-dest="Graveyard">☠ ${esc(d.name)} died</button>` : `<button class="btn small" data-a="tok-rm-go" data-k="${esc(d.id)}" data-how="died">☠ ${esc(d.name)} died</button>`).join("")}
         <button class="btn small primary" data-a="note-done" data-n="${nid}">Done</button></div>
+    </div>` : n.kind === "payN" ? `<div class="ask-box">
+      <div>❓ <b>${esc(n.from)}</b>'s <b>${esc(n.src)}</b>: ${esc(n.text)}</div>
+      <div class="row"><label class="mini">Paid for <input type="number" min="0" max="${n.n}" value="0" inputmode="numeric" class="x-input" id="pn-${nid}"> of ${n.n}</label>
+        <button class="btn small primary" data-a="paynote-go" data-n="${nid}">Send</button>
+        <button class="btn small" data-a="paynote-go" data-n="${nid}" data-v="0">Pay none</button></div>
     </div>` : n.kind === "ask" ? `<div class="ask-box">
       <div>❓ <b>${esc(n.from)}</b>'s <b>${esc(n.src)}</b>: ${esc(n.text)}</div>
       <div class="row"><button class="btn small primary" data-a="note-answer" data-n="${nid}" data-v="yes">${esc(n.yes)}</button>
@@ -5251,6 +5256,13 @@ function startController(code, pid) {
   }
 
   function askPunishers() {
+    // Several of the same trigger for the same player at once (Smothering Tithe on a 7-card wheel): one question, "pay for how many?"
+    const fresh = reminders.filter(r => r.punish && r.who && !r.asked && room.players?.[r.who]), groups = new Map();
+    fresh.forEach(r => { const k = `${r.src}|${r.srcId || ""}|${r.who}|${r.punish.ask}|${r.text}`; groups.set(k, [...(groups.get(k) || []), r]); });
+    groups.forEach(list => { if (list.length < 2 || /\{X\}/.test(list[0].punish.ask)) return;
+      const r0 = list[0], ids = list.map(r => r.id); list.forEach(r => { r.asked = true; r.payGroup = ids; });
+      const theirs = t => String(t || "").replace(/^you (\w+?)(e?s)?\b/i, (m0, v) => `${me.name} ${v}${/(s|sh|ch|x)$/.test(v) ? "es" : "s"}`);
+      sendNote(r0.who, { kind: "payN", n: list.length, text: `${list.length} triggers. ${punishAsk(r0)} for how many of them?${r0.punish.elseText ? ` Each one you don't pay: ${theirs(r0.punish.elseText)}` : ""}`, src: r0.src, yes: punishAsk(r0), replyTo: pid, rid: r0.id }); });
     reminders.filter(r => r.punish && r.who && !r.asked && room.players?.[r.who]).forEach(r => {
       r.asked = true;
       const unless = /unless/i.test(r.text);
@@ -9140,6 +9152,14 @@ function startController(code, pid) {
         if (me.bf?.[r.srcId]?.tap) { toggleTap(r.srcId); logTo(code, `↻ ${me.name} untapped ${dispName(me.bf[r.srcId])}`); }
         render(); break;
       }
+      case "paynote-go": { // "pay for how many?" answer to a batch of punisher triggers
+        const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
+        const k = Math.max(0, Math.min(n.n, b.dataset.v != null ? Number(b.dataset.v) : Number(document.getElementById(`pn-${nid}`)?.value) || 0));
+        update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
+        update(ref(db, `rooms/${code}/replies/${n.replyTo}`), { [n.rid]: { paidN: k, name: me.name, at: Date.now() } });
+        if (k) logTo(code, `${me.name} paid for ${k} of ${n.n} (${n.src})`);
+        render(); break;
+      }
       case "note-drew": { // another player's wheel (Windfall): record my draws so Psychosis/Scrawling Crawler and friends see them
         const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
         update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
@@ -10375,6 +10395,7 @@ function startController(code, pid) {
       const r = reminders.find(x => x.id === rid);
       if (r?.oppPick) resolveOppPick(r, rep);
       else if (r?.handMana) handManaDone(r, Number(rep.count) || 0, rep.name);
+      else if (r?.payGroup && rep.paidN != null) { const k = Math.max(0, Math.min(r.payGroup.length, Number(rep.paidN) || 0)); r.payGroup.map(id => reminders.find(x => x.id === id)).filter(Boolean).forEach((x, i) => resolvePunish(x, i < k, rep.name)); }
       else if (r) resolvePunish(r, rep.paid, rep.name);
     });
     if (prevTurn !== undefined && lastTurn && lastTurn !== prevTurn) {
