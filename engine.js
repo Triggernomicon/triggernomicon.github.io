@@ -884,10 +884,10 @@ export function parseAbilities(card) {
     const choice = /\btokens? or (a|an)\b/i.test(text) && effs.filter(f => f.k === "tok").length > 1;
     const pun = parsePunisher(text, card.n);
     if (pun) { out.trig.push({ cond, text, effs: [], auto: false, punish: pun }); continue; }
-    const modal = text.match(/choose (one or more|one or both|any number|one|two|three|up to that many)\b[^—]*—\s*$/i);
-    if (modal) {
+    const modal = text.match(/choose (one or more|one or both|any number|up to one|up to two|one|two|three|up to that many)\b[^—]*—\s*$/i);
+    if (modal) { // "choose up to one" (Hullbreaker Horror) is "choose one" that may be skipped (Done)
       const payN = text.match(/you may pay ((?:\{[^}]+\})+) up to (one|two|three|four|\d+) times/i);
-      out.trig.push({ cond, text, effs: [], auto: false, modes: parseModes(allLines, li + 1, card.n), pick: /one or more|one or both|any number|up to that many/i.test(modal[1]) ? "multi" : modal[1].toLowerCase(), ...(payN ? { note: `Pay ${payN[1]} for each mode you choose (up to ${payN[2]}).` } : {}) });
+      out.trig.push({ cond, text, effs: [], auto: false, modes: parseModes(allLines, li + 1, card.n), pick: /one or more|one or both|any number|up to that many|up to two/i.test(modal[1]) ? "multi" : modal[1].toLowerCase().replace(/^up to /, ""), ...(payN ? { note: `Pay ${payN[1]} for each mode you choose (up to ${payN[2]}).` } : {}) });
       continue;
     }
     if (/\.\s*otherwise,/i.test(text) && auto) { out.trig.push({ cond, text, effs, auto: false, partial, may, choice }); if (cond2) out.trig.push({ cond: cond2, text, effs, auto: false, partial, may, choice }); continue; }
@@ -2420,6 +2420,27 @@ export function detectCombos(p, lookup, ctx = {}) {
         desc: `Your nonland permanents make ${mana} mana; Scepter's {2} casts Dramatic Reversal, which untaps them all: infinite mana, and each loop is an instant cast (prowess, magecraft, storm).` }); } }
   // Cards known to be in hand (digital hand) or cast by me this turn: some loops need a spell, not a permanent
   const handOrCast = n => (ctx.hand || []).includes(n) || (ctx.cast || []).includes(n);
+  // Hullbreaker Horror + a mana rock that makes more than it costs (Sol Ring, Mana Vault, Mox Amber, Mana Crypt) + a cheap permanent:
+  // cast the permanent → bounce the rock; recast the rock → bounce the permanent. Two casts per loop; mana left over = rock's mana − both costs
+  { const hh = ents.find(x => /^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o));
+    if (hh) {
+      const legCols = ents.filter(x => /\bLegendary\b/.test(x.t) && /\b(Creature|Planeswalker)\b/.test(x.t)).flatMap(x => (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []));
+      const rockOut = x => { const m = x.o.match(/^\{T\}: Add ((?:\{C\})+)\.?$/m); if (m) return { n: m[1].length / 3, colorless: true };
+        if (/^\{T\}: Add one mana of any color among legendary creatures and planeswalkers you control/im.test(x.o)) return legCols.length ? { n: 1, colorless: false, cols: legCols } : null; return null; };
+      const cards = [...ents.map(x => ({ n: x.n, t: x.t, m: String(lookup(x.n)?.m ?? x.e.m ?? "") })), ...(ctx.hand || []).map(n => ({ n, t: lookup(n)?.t || "", m: String(lookup(n)?.m || "") }))]
+        .filter(c => c.n !== hh.n && !/\bLand\b/.test(c.t) && /\b(Artifact|Creature|Enchantment|Planeswalker|Battle)\b/.test(c.t));
+      for (const rk of ents.filter(x => x.id !== hh.id && !/\bLand\b/.test(x.t))) {
+        const out1 = rockOut(rk); if (!out1) continue;
+        const rc = manaValue(String(lookup(rk.n)?.m ?? rk.e.m ?? ""));
+        const fits = cards.filter(c => c.n !== rk.n).map(c => ({ ...c, mv: manaValue(c.m), pips: (c.m.match(/\{[WUBRG]\}/g) || []).map(s => s[1]) }))
+          .filter(c => c.mv + rc <= out1.n && (out1.colorless ? !c.pips.length : c.pips.length <= 1 && c.pips.every(p => out1.cols.includes(p))))
+          .sort((a, b) => a.mv - b.mv);
+        if (!fits.length) continue;
+        const y = fits[0], net = out1.n - rc - y.mv, pieces = [hh.n, rk.n, y.n];
+        out.push({ key: `hull:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: net > 0 && out1.colorless ? "mana" : "info",
+          desc: `Tap ${rk.n} (${out1.n} mana), cast ${y.n} (${y.mv}): ${hh.n} returns ${rk.n} to your hand. Recast ${rk.n} (${rc}): ${hh.n} returns ${y.n}. Two spells per loop${net > 0 ? `, +${net} ${out1.colorless ? "colorless " : ""}mana each time: infinite mana, storm and cast triggers` : ": infinite storm count and cast triggers (no mana left over)"}.` });
+        break;
+      } } }
   // Storm-Kiln Artist + Haze of Rage: buyback Haze with 3+ spells before it makes 4+ Treasures, enough to cast it again
   { const kiln = pick(/whenever you cast or copy an instant or sorcery spell, create a treasure token/i)[0];
     if (kiln && handOrCast("Haze of Rage")) out.push({ key: `named:${kiln.n}+Haze of Rage`, name: `${kiln.n} + Haze of Rage`, pieces: [kiln.n, "Haze of Rage"], win: false, kind: "info",
@@ -2430,9 +2451,16 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (xt) out.push({ key: `named:Isochron Scepter+Narset's Reversal+${xt}`, name: `Isochron Scepter (Narset's Reversal) + ${xt}`, pieces: ["Isochron Scepter", "Narset's Reversal", xt], win: false, kind: "info",
       desc: `Cast ${xt}, then (holding priority) pay {2} and tap Scepter: the Narset's Reversal copy copies ${xt} and returns it to your hand. One extra turn each turn, and you cast ${xt} again: infinite turns.` }); }
   // Underworld Breach + Lotus Petal + Brain Freeze: each Petal escape is a free spell (storm +1); Brain Freeze copies at yourself refill the graveyard
-  { const ub = has("Underworld Breach"), lp = has("Lotus Petal"), bfz = Object.values(p.gy || {}).some(c => c.n === "Brain Freeze") || handOrCast("Brain Freeze") || (ctx.hand || []).includes("Brain Freeze");
-    if (ub && lp && bfz) out.push({ key: "named:Underworld Breach+Lotus Petal+Brain Freeze", name: "Underworld Breach + Lotus Petal + Brain Freeze", pieces: ["Underworld Breach", "Lotus Petal", "Brain Freeze"], win: false, kind: "info",
-      desc: "Tap and sacrifice Lotus Petal, escape it back (exile 3 other graveyard cards): +1 storm each time. Cast Brain Freeze (from hand, or escape it too): point two copies at yourself to refill your graveyard (mill 3 each), the rest at an opponent. Repeat until they're milled out. Breach is sacrificed at the end step." }); }
+  { const ub = has("Underworld Breach"), lp = has("Lotus Petal") || has("Lion's Eye Diamond"), bfz = Object.values(p.gy || {}).some(c => c.n === "Brain Freeze") || handOrCast("Brain Freeze");
+    if (ub && lp && bfz) { const led = lp.n === "Lion's Eye Diamond";
+      out.push({ key: `named:Underworld Breach+${lp.n}+Brain Freeze`, name: `Underworld Breach + ${lp.n} + Brain Freeze`, pieces: ["Underworld Breach", lp.n, "Brain Freeze"], win: false, kind: "info",
+      desc: led ? "Discard your hand and sacrifice Lion's Eye Diamond for three mana of one color, then escape it back (exile 3 other graveyard cards): +1 storm and +3 mana each time. Escape Brain Freeze ({1}{U}): one copy at yourself refills your graveyard, the rest mill an opponent. Repeat until they're milled out. Breach is sacrificed at the end step."
+        : "Tap and sacrifice Lotus Petal, escape it back (exile 3 other graveyard cards): +1 storm each time. Cast Brain Freeze (from hand, or escape it too): point two copies at yourself to refill your graveyard (mill 3 each), the rest at an opponent. Repeat until they're milled out. Breach is sacrificed at the end step." }); } }
+  // Underworld Breach + Grinding Station + a 0-cost artifact: sacrifice it to Station (mill 3), escape it (exile 3), it enters and untaps Station
+  { const ub = has("Underworld Breach"), gs = ents.find(x => /^\{T\}, Sacrifice an artifact: Target player mills (?:three|\d+) cards?/im.test(x.o) && /whenever an artifact enters, you may untap this/i.test(x.o));
+    const zero = gs && [...ents.filter(x => x.id !== gs.id), ...Object.values(p.gy || {}).map(c => ({ n: c.n, t: c.t || lookup(c.n)?.t || "" }))].find(x => /\bArtifact\b/.test(x.t || lookup(x.n)?.t || "") && !/\bLand\b/.test(x.t || lookup(x.n)?.t || "") && x.n !== gs.n && manaValue(String(lookup(x.n)?.m ?? "")) === 0 && lookup(x.n)?.m != null);
+    if (ub && gs && zero) out.push({ key: `named:Underworld Breach+${gs.n}+${zero.n}`, name: `Underworld Breach + ${gs.n} + ${zero.n}`, pieces: ["Underworld Breach", gs.n, zero.n], win: false, kind: "info",
+      desc: `Tap ${gs.n} and sacrifice ${zero.n} (target player mills 3), escape ${zero.n} for free (exile 3 other graveyard cards); it enters and untaps ${gs.n}. Mill yourself to keep the graveyard stocked: infinite self-mill, storm, artifact enter and leave triggers. Breach is sacrificed at the end step.` }); }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;

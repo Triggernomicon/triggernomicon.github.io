@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018d";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018d";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018d";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018d";
+import { firebaseConfig } from "./config.js?v=20261018e";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018e";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018e";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018e";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -753,10 +753,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18d";
+const APP_VERSION = "2026.10.18e";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018d" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018e" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3789,7 +3789,9 @@ function startController(code, pid) {
       all.forEach(t => { const m = t.match(/each land is an? (Forest|Swamp|Island|Mountain|Plains) in addition to its other land types/i); if (m) { const s = `{${({ forest: "G", swamp: "B", island: "U", mountain: "R", plains: "W" })[m[1].toLowerCase()]}}`; if (!out.includes(s)) out.push(s); } });
       if (Object.values(me.bf || {}).some(x => /lands you control are every basic land type in addition to their other types/i.test(x.o || lookupCard(x.n)?.o || "")) && !out.includes("any")) out.push("any"); }
     { const mc = o.match(/^Metalcraft — \{T\}: Add one mana of any color\. Activate only if you control three or more artifacts\.?$/m); if (mc && countTypes(me, ["artifact"]) >= 3) out.push("any"); }
-    if (/^\{T\}: Add one mana of any color\b/im.test(o)) out.push("any");
+    if (/^\{T\}: Add one mana of any color(?! among)\b/im.test(o)) out.push("any");
+    // Mox Amber: only the colors of my legendary creatures and planeswalkers
+    if (/^\{T\}: Add one mana of any color among legendary creatures and planeswalkers you control/im.test(o)) [...new Set(Object.values(me.bf || {}).filter(x => /\bLegendary\b/.test(x.t || lookupCard(x.n)?.t || "") && /\b(Creature|Planeswalker)\b/.test(x.t || lookupCard(x.n)?.t || "")).flatMap(x => String(x.m || lookupCard(x.n)?.m || "").match(/[WUBRG]/g) || []))].forEach(c => out.push(`{${c}}`));
     o.split("\n").forEach(l => { const m = l.match(/^\{T\}, Pay (\d+) life: Add one mana of any color\.?$/i); if (m) out.push(`any~${m[1]}`); });
     o.split("\n").forEach(l => { const m = l.match(/^\{T\}: Add ((?:\{[WUBRGC]\})+)\. Put an? ([a-z]+) counter on [^.]+\.$/i); if (m) out.push(`${m[1]}+c:${m[2].toLowerCase()}`); });
     o.split("\n").forEach(l => { const m = l.match(/^((?:\{[^}T]+\})+), \{T\}: Add (\{[WUBRGC]\}) for each (white |blue |black |red |green )?creature card in your graveyard\./i); if (!m) return;
@@ -6381,6 +6383,7 @@ function startController(code, pid) {
               : r.tapLock ? (() => { const l = crTargets({ cr: true }).filter(c => c.v !== `${pid}|bf|${r.srcId}`); return l.length ? `<select class="fetch-pick" id="tl-${r.id}">${l.map(c => `<option value="${c.v}">${esc(c.o.id === pid ? "Mine" : c.o.name)}: ${esc(c.s.name)}</option>`).join("")}</select><button class="btn small primary" data-a="tl-go" data-id="${r.id}">Tap it</button>` : `<span class="mini">No creature to target.</span>`; })()
               : r.gyToBf ? (() => { const l = r.gyToBf.filter(([g]) => me.gy?.[g]); return l.length ? `<select class="fetch-pick" id="g2b-${r.id}">${l.map(([g, n]) => `<option value="${g}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" data-a="g2b-go" data-id="${r.id}">Onto the battlefield</button>` : `<span class="mini">None of them are still in your graveyard.</span>`; })()
               : r.cumUp ? `<button class="btn small primary" data-a="cum-go" data-id="${r.id}" data-v="1">Paid${r.cumUp.life ? ` ${r.cumUp.life * r.cumUp.n} life` : ""}</button><button class="btn small" data-a="cum-go" data-id="${r.id}" data-v="0">🗡 Sacrifice it</button>`
+              : /^you may untap (?:this|it)(?: artifact| creature| permanent| land| enchantment)?\.?$/i.test(r.text || "") && r.srcId && me.bf?.[r.srcId]?.tap ? `<button class="btn small primary" data-a="self-untap" data-id="${r.id}">↻ Untap ${esc(dispName(me.bf[r.srcId]))}</button>`
               : r.wheelAll ? `<button class="btn small primary" data-a="wheel-go" data-id="${r.id}">Tell the table</button>`
               : r.impLoss ? (() => { const l = Object.entries(room.casts || {}).filter(([, c]) => (c.turnNo || 0) === (room.turnNo || 0) && !c.countered && c.n !== r.src).reverse(); return l.length ? `<select class="fetch-pick" id="imp-${r.id}">${l.map(([k, c]) => `<option value="${esc(k)}">${esc(castLabel(c))} (MV ${manaValue(c.m || "")})</option>`).join("")}</select><button class="btn small primary" data-a="imp-go" data-id="${r.id}">Retargeted: lose the life</button>` : `<span class="mini">No spell on the stack (in the app).</span>`; })()
               : r.moxD ? `${digDiscardSel("discard a land card", "mxd-" + r.id)}<button class="btn small primary" data-a="moxd-go" data-id="${r.id}" data-v="1">Discarded a land</button><button class="btn small" data-a="moxd-go" data-id="${r.id}" data-v="0">Didn't → graveyard</button>`
@@ -7092,7 +7095,7 @@ function startController(code, pid) {
       if (mc && me.pool && Object.keys(me.pool).length) payPool(mc, name); }
     { const em = String(ab.text || "").match(/^you get an emblem with "(.+)"\.?$/i); if (em) { mutate(p => { p.emblems = [...(p.emblems || []), { text: em[1], src: name }]; }); logTo(code, `🏅 ${me.name} got an emblem (${name}): ${em[1]}`); } }
     logTo(code, `${me.name} activated ${name}: ${ab.label}`);
-    const pickerOnly = (!ab.auto && effs.length && effs.every(f => f.k === "maze")) || !ab.auto && effs.length && effs.every(f => ["fetch", "remove", "imprint", "regrow", "impulse", "gyhate", "edict", "countersTarget", "tokCopy", "tplayerTok", "pumpTarget", "regen", "copyCreature", "manaAny", "dmgCr", "wisecrack", "bane", "radiant", "clearCtrs", "tloseX", "oppLoseThat", "drainDevo", "victimize", "revealMv", "arcum", "ping", "addType", "animate", "maze", "copyPick", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k)) && !/\b(then|and) (draw|you|each|create|put|gain|lose|deal)/i.test(ab.text);
+    const pickerOnly = (!ab.auto && effs.length && effs.every(f => f.k === "maze")) || !ab.auto && effs.length && effs.every(f => ["fetch", "remove", "imprint", "regrow", "impulse", "gyhate", "edict", "countersTarget", "tokCopy", "tplayerTok", "pumpTarget", "regen", "copyCreature", "manaAny", "dmgCr", "wisecrack", "bane", "radiant", "clearCtrs", "tloseX", "oppLoseThat", "drainDevo", "victimize", "revealMv", "arcum", "ping", "addType", "animate", "maze", "copyPick", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k) || (f.k === "mill" && /target/i.test(f.who || ""))) && !/\b(then|and) (draw|you|each|create|put|gain|lose|deal)/i.test(ab.text);
     if ((!ab.auto || ab.partial) && !le && !pickerOnly && !/exiled card an opponent owns with a void counter|copy (the exiled card|a card exiled with)/i.test(ab.text)) reminders.push({ id: newId(), src: name, text: ab.text, times: 1,
       note: ab.auto ? "Partly applied. Handle the rest yourself." : (c.sacWhat && !tokKey && !sc) || c.sacOther ? "Sacrifice what the cost asks for yourself." : "",
       ...(() => { const dn = !ab.effs?.some(f => /draw/i.test(f.k)) && String(ab.text).match(/\bdraws? (a|one|two|three|four|five) cards?/i); return dn ? { drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4, five: 5 })[dn[1].toLowerCase()] } : {}; })() }); // loots: a Drew button for the draw part
@@ -9131,6 +9134,12 @@ function startController(code, pid) {
         render();
         break;
       }
+      case "self-untap": { // "Whenever an artifact enters, you may untap this artifact" (Grinding Station)
+        const r = reminders.find(x => x.id === b.dataset.id); if (!r) break;
+        reminders = reminders.filter(x => x !== r);
+        if (me.bf?.[r.srcId]?.tap) { toggleTap(r.srcId); logTo(code, `↻ ${me.name} untapped ${dispName(me.bf[r.srcId])}`); }
+        render(); break;
+      }
       case "note-drew": { // another player's wheel (Windfall): record my draws so Psychosis/Scrawling Crawler and friends see them
         const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
         update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
@@ -9906,18 +9915,21 @@ function startController(code, pid) {
         if (!r || !o) break;
         const n = r.effs.find(f => f.k === "tdraw").n * (r.times || 1);
         reminders = reminders.filter(x => x.id !== r.id);
-        sendNote(b.dataset.o, { text: `Draw ${n === 1 ? "a card" : n + " cards"}.`, short: `draw ${n}`, src: r.src });
+        sendNote(b.dataset.o, { text: `Draw ${n === 1 ? "a card" : n + " cards"}.`, short: `draw ${n}`, src: r.src, drawN: n }); // their "Drew" button tells the table (Scrawling Crawler, Psychosis Crawler)
         logTo(code, `🎁 ${r.src}: ${o.name} draws ${n}`);
         // anything else the ability does stays as a reminder
         const rest = r.text.replace(/target (opponent|player) draws [^.]*\.\s*/i, "").trim();
         if (rest) {
-          let note = "Handle the rest yourself.";
+          const effs = (r.effs || []).filter(f => f.k !== "tdraw"); // Ms. Bumbleflower: the +1/+1 counter (and flying) gets its own target picker
+          let note = effs.length ? "" : "Handle the rest yourself.", drawN = null;
           if (/second time this ability has resolved this turn/i.test(rest)) {
             const key = `${r.srcId || r.src}:${room.turnNo || 0}`;
             resolvedCount[key] = (resolvedCount[key] || 0) + 1;
             note = resolvedCount[key] === 2 ? "⚡ Second time this turn: you draw two cards!" : `Resolved ${resolvedCount[key]}× this turn.`;
+            if (resolvedCount[key] === 2) drawN = 2;
           }
-          reminders.push({ id: newId(), src: r.src, text: rest, times: r.times, note });
+          reminders.push({ id: newId(), src: r.src, srcId: r.srcId, text: rest, times: r.times, note, ...(effs.length ? { effs } : {}) });
+          if (drawN) reminders.push({ id: newId(), src: r.src, srcId: r.srcId, text: "Second time this turn: draw two cards.", times: 1, drawN });
         }
         render();
         break;
