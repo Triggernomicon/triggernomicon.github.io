@@ -145,6 +145,18 @@ export function parsePunisher(text, cardName) {
 
 // ----- Tutors / land searches -----
 // Mana value from a cost like "{2}{G}{G}" (X counts as 0, hybrid as 1)
+// Life-gain replacements on the gaining player's board: "gain that much life plus 1" (Cleric Class, Angel of Vitality) and "twice that much"
+// (Rhox Faithmender, Boon Reflection, Alhammarret's Archive). The +1s go first, then the doublings (the best order for the player).
+export function gainAdj(p, n, lookup) {
+  if (!(n > 0)) return { n, why: "" };
+  let plus = 0, dbl = 0; const src = [];
+  Object.values(p?.bf || {}).forEach(x => { const o = String(x.o || lookup?.(x.n)?.o || "");
+    if (/^If you would gain life, you gain that much life plus 1 instead\.?$/m.test(o)) { plus++; src.push(x.n); }
+    if (/^If you would gain life, you gain twice that much life instead\.?$/m.test(o)) { dbl++; src.push(x.n); } });
+  if (!plus && !dbl) return { n, why: "" };
+  const out = (n + plus) * 2 ** dbl;
+  return { n: out, why: ` (${n} → ${out}: ${[...new Set(src)].join(", ")})` };
+}
 export function manaValue(m) {
   return (String(m || "").split(" // ")[0].match(/\{[^}]+\}/g) || []).reduce((a, sym) => {
     const x = sym.slice(1, -1);
@@ -1285,14 +1297,14 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (f.fero && (ctx.maxPower ?? 0) < 4) { if (!ctx.feroNoted) { ctx.feroNoted = 1; ctx.logs.push(`⚙ ${src}: ferocious didn't happen (no creature with power 4 or greater)`); } continue; }
         if (f.k === "gainPer") {
           const k = f.minPow != null ? (ctx.powers || []).filter(x => x >= f.minPow).length : countTypes(p, f.types);
-          if (k) { p.life = (p.life ?? 40) + f.n * k; p.lifeGained = ctx.turnNo; p.lifeGainedN = { t: ctx.turnNo, n: (p.lifeGainedN?.t === ctx.turnNo ? p.lifeGainedN.n || 0 : 0) + f.n * k }; ctx.logs.push(`⚙ ${src}: ${ctx.who ? ctx.who + " " : ""}gained ${f.n * k} life (${k} ${f.label})`); }
+          if (k) { const ga = gainAdj(p, f.n * k, lookup); p.life = (p.life ?? 40) + ga.n; p.lifeGained = ctx.turnNo; p.lifeGainedN = { t: ctx.turnNo, n: (p.lifeGainedN?.t === ctx.turnNo ? p.lifeGainedN.n || 0 : 0) + ga.n }; ctx.logs.push(`⚙ ${src}: ${ctx.who ? ctx.who + " " : ""}gained ${ga.n} life (${k} ${f.label})${ga.why}`); }
         }
         if (f.k === "drawFor" && f.chosen) { ctx.remind.push({ src, srcId, text: "Choose a creature type: draw a card for each permanent you control of that type.", typeDraw: true, times: 1 }); continue; }
         if (f.k === "drawFor") { const k = countTypes(p, f.types); if (k) ctx.remind.push({ src, srcId, text: `Draw ${k === 1 ? "a card" : k + " cards"}.`, note: `one for each ${f.label} you control`, times: 1 }); }
         if (f.k === "dieReturn") ctx.remind.push({ src, srcId, text: "Return it to the battlefield. It's an enchantment now (not a creature).", dieReturn: f, times: 1 });
         if ((f.k === "gain" || f.k === "dmgCr") && f.n && typeof f.n === "object") f = { ...f, n: f.n.count ? countTypes(p, [f.n.count]) : (p.bf?.[srcId]?.c?.[f.n.ctr] || 0) };
         if (f.k === "gain" && (p.life ?? 40) <= 5 && Object.values(p.bf || {}).some(x => /if you would gain life while you have 5 or less life, you gain twice that much life instead/i.test(x.o || lookup?.(x.n)?.o || ""))) { f = { ...f, n: f.n * 2 }; ctx.logs.push(`⚙ ${src}: life gain doubled (5 or less life)`); }
-        if (f.k === "gain") { p.lifeGained = ctx.turnNo; p.lifeGainedN = { t: ctx.turnNo, n: (p.lifeGainedN?.t === ctx.turnNo ? p.lifeGainedN.n || 0 : 0) + f.n }; p.life = (p.life ?? 40) + f.n; ctx.logs.push(`⚙ ${src}: ${ctx.who ? ctx.who + " " : ""}gained ${f.n} life`); }
+        if (f.k === "gain") { const ga = gainAdj(p, f.n, lookup); p.lifeGained = ctx.turnNo; p.lifeGainedN = { t: ctx.turnNo, n: (p.lifeGainedN?.t === ctx.turnNo ? p.lifeGainedN.n || 0 : 0) + ga.n }; p.life = (p.life ?? 40) + ga.n; ctx.logs.push(`⚙ ${src}: ${ctx.who ? ctx.who + " " : ""}gained ${ga.n} life${ga.why}`); }
         if (f.k === "lose") {
           const n = f.perCtr ? f.n * (p.bf?.[srcId]?.c?.[f.perCtr] || 0) : f.n;
           if (n) { p.life = (p.life ?? 40) - n; ctx.logs.push(`⚙ ${src}: ${ctx.who ? ctx.who + " " : ""}lost ${n} life${f.perCtr ? ` (${n / f.n} ${f.perLabel} counter${n / f.n === 1 ? "" : "s"})` : ""}`); }
@@ -2453,6 +2465,29 @@ export function detectCombos(p, lookup, ctx = {}) {
       const hd = ents.find(x => /^\{G\}, \{T\}: Reveal cards from the top of your library until you reveal a basic land card\. Put that card into your hand and all other cards revealed this way into your graveyard\.?$/im.test(x.o));
       if (hd && (libBasics === null || libBasics === 0)) out.push({ key: `named:${hd.n}+Thassa's Oracle`, name: `${hd.n} + Thassa's Oracle`, pieces: [hd.n, "Thassa's Oracle"], win: true, kind: "info",
         desc: `Activate ${hd.n} ({G}, tap; it can't be summoning sick): with no basic lands left in your library, every card goes to your graveyard. Then cast Thassa's Oracle: you win.${libBasics === null ? " Only once your basic lands are out of the library." : ""}` });
+    } }
+  // +1/+1 counter loops around Shalai and Hallar, Walking Ballista and Vigor
+  { const gainers = ents.filter(x => /^whenever you gain life, put (?:a|one) \+1\/\+1 counters? on (?:this creature|~|each creature you control|target creature(?: or enchantment)? you control|[^.]*?)(?: and scry 1)?\.?$/im.test(x.o) || /^whenever you gain life, put a \+1\/\+1 counter on /im.test(x.o));
+    const llFor = id => { const t = ents.find(x => x.id === id); if (!t) return null;
+      if (/^(?:[a-z ,]*\b)?lifelink\b/im.test(t.o) && !/gains? lifelink/i.test(t.o.match(/^.*lifelink.*$/im)?.[0] || "")) return t.n;
+      const at = ents.find(x => x.e.att === id && /\b(?:equipped|enchanted) creature (?:gets [^.]*?and )?(?:has|gains) [^.]*lifelink/i.test(x.o)); if (at) return at.n;
+      const all = pick(/^(?:other )?creatures you control have [^.]*lifelink/im)[0]; if (all && all.id !== id) return all.n;
+      const hel = pick(/another target creature gains lifelink until end of turn/i)[0]; if (hel && hel.id !== id) return `${hel.n} (activate it)`;
+      return null; };
+    const sh = ents.find(x => /^whenever one or more \+1\/\+1 counters are put on a creature you control, [^,]+ deals that much damage to target opponent/im.test(x.o));
+    if (sh && gainers.length) { const ll = llFor(sh.id); const g = gainers.find(x => x.id !== sh.id) || gainers[0];
+      if (ll) { const pieces = [...new Set([sh.n, g.n, ...(ll.startsWith(g.n) ? [] : [ll.replace(/ \(activate it\)$/, "")])])];
+        out.push({ key: `ll:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: true, kind: "dmgAll",
+          desc: `${sh.n} has lifelink (${ll}): each +1/+1 counter makes it deal damage to an opponent, the lifelink gain triggers ${g.n}, which puts another counter on: infinite damage and life. Start it with any +1/+1 counter.` }); } }
+    const bal = ents.find(x => /^Remove a \+1\/\+1 counter from this creature: It deals 1 damage to any target\.?$/m.test(x.o));
+    if (bal) {
+      const g = gainers.find(x => x.id !== bal.id && /each creature you control|target creature/i.test(x.o)), ll = llFor(bal.id);
+      if (g && ll && !(g.n === "Heliod, Sun-Crowned")) out.push({ key: `ll:${bal.n}+${g.n}`, name: `${bal.n} + ${g.n}`, pieces: [bal.n, g.n], win: true, kind: "dmgAll",
+        desc: `${bal.n} has lifelink (${ll}): each ping gains 1 life, ${g.n} puts the counter back. Infinite damage and life.` });
+      const vig = ents.find(x => /if damage would be dealt to another creature you control, prevent that damage\. put a \+1\/\+1 counter on that creature for each 1 damage prevented/i.test(x.o));
+      const boost = ents.find(x => /^if one or more \+1\/\+1 counters would be put on (?:a creature|an artifact or creature|a permanent|a creature or vehicle) you control, (?:that many plus one|twice that many)/im.test(x.o) || /^if an effect would put one or more counters on a permanent you control, it puts twice that many of those counters on that permanent instead/im.test(x.o));
+      if (vig && boost) out.push({ key: `vig:${vig.n}+${bal.n}+${boost.n}`, name: `${vig.n} + ${bal.n} + ${boost.n}`, pieces: [vig.n, bal.n, boost.n], win: true, kind: "dmgAll",
+        desc: `Ping ${bal.n} with itself: ${vig.n} prevents it and puts a counter back, and ${boost.n} adds at least one more. Each self-ping nets a counter to ping an opponent with: infinite damage.` });
     } }
   // Storm-Kiln Artist + Haze of Rage: buyback Haze with 3+ spells before it makes 4+ Treasures, enough to cast it again
   { const kiln = pick(/whenever you cast or copy an instant or sorcery spell, create a treasure token/i)[0];

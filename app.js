@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018g";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018g";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018g";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018g";
+import { firebaseConfig } from "./config.js?v=20261018h";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018h";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018h";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261018h";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -753,10 +753,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18g";
+const APP_VERSION = "2026.10.18h";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018g" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018h" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3083,6 +3083,15 @@ function startController(code, pid) {
     if (aura) reminders.push({ id: newId(), src: dispName(card), text: "", times: 1, effs: [aura] });
     const wrE = card.o && winRule(card);
     if (wrE && wrE.when === "manual" && /^when [^,]* enters/i.test(wrE.text) && !/devotion to \w+[^]*number of cards in your library, you win/i.test(card.o || "")) reminders.push({ id: newId(), src: dispName(card), text: wrE.text, times: 1, winAsk: true });
+    // Backup N (Conclave Sledge-Captain has three): each one puts N +1/+1 counters on target creature; another creature also gains
+    // the card's abilities below the backup line until end of turn (keywords now, combat-damage triggers tracked for this turn)
+    { const lines = String(card.o || "").replace(/\([^)]*\)/g, "").split("\n").map(l => l.trim()).filter(Boolean), bi = lines.findIndex(l => /^backup \d+/i.test(l));
+      if (bi >= 0) { const ns = [...lines[bi].matchAll(/backup (\d+)/gi)].map(m => Number(m[1])), rest = lines.slice(bi + 1);
+        const kwLine = l => /^(?:(?:flying|trample|vigilance|lifelink|deathtouch|first strike|double strike|haste|menace|reach|hexproof|indestructible|ward \{\d+\})(?:, |$))+$/i.test(l);
+        const kws = rest.filter(kwLine).flatMap(l => l.split(/,\s*/).map(x => x.trim().toLowerCase())), trig = rest.filter(l => !kwLine(l));
+        ns.forEach((n, i) => reminders.push(normalizeRem({ id: newId(), src: `${dispName(card)} (backup ${ns.length > 1 ? `${i + 1}/${ns.length}` : n})`, srcId: id, text: `Put ${n === 1 ? "a +1/+1 counter" : `${n} +1/+1 counters`} on target creature.`, times: 1,
+          effs: [{ k: "countersTarget", n, key: "p1p1", label: "+1/+1", what: "creature", filter: parseTargetFilter("creature"), ...(kws.length ? { kws } : {}) }], backup: { lines: trig, src: dispName(card) },
+          ...(trig.length ? { note: `If it's another creature, it also gains until end of turn: ${trig.join(" ")}` } : {}) }))); } }
     const instead = card.o ? entersInstead(card) : null;
     if (instead) { reminders.push({ id: newId(), src: dispName(card), text: `To keep it, ${instead}. Otherwise it goes to your graveyard.`, times: 1, instead: { bfId: id, what: instead } }); render(); }
     if (castKey) endStep(castKey, snapP, { name: dispName(card), perm: true, card: { n: card.n, t: card.t || "", m: card.m || "", img: card.img || "" } });
@@ -3128,6 +3137,12 @@ function startController(code, pid) {
   }
   // Exalted (Noble Hierarch, Sublime Archangel's "other creatures have exalted" isn't counted): on the first attacker of a combat,
   // offer "+N/+N if it attacks alone" — the app can't know yet whether more attackers follow
+  // Mayael's Aria: biggest power among my creatures, checked again after each step
+  function myMaxPower() {
+    const bf = Object.entries(me.bf || {}).filter(([, e]) => /\bCreature\b/.test(e.t || lookupCard(e.n)?.t || "")).map(([id, e]) => Number(String(ptOf(e, countsFor(me), pid, id) || "0").split("/")[0]) || 0);
+    const tk = Object.values(me.tokens || {}).filter(t => t.count > 0 && isCreatureToken(t.name)).map(t => Number(String(tokenPT(t, tablePT) || "0").split("/")[0]) || 0);
+    return Math.max(0, ...bf, ...tk);
+  }
   function exaltedCheck(who) {
     if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted); return; } // a second attacker: not alone
     const n = Object.values(me.bf || {}).reduce((s, x) => s + (String(x.o || lookupCard(x.n)?.o || "").match(/^Exalted\b/gm) || []).length, 0);
@@ -3302,7 +3317,14 @@ function startController(code, pid) {
     return ampDmg(k.n, (r.srcId && me.bf?.[r.srcId]) || lookupCard(r.src.replace(/ \(.*\)$/, "")), c.o.id !== pid);
   }
   const crDT = (r, c) => r.crDmg.self ? (c.s.kws || []).includes("deathtouch") : !!r.crDmg.dt || hasDeathtouch(r.srcId && me.bf?.[r.srcId], r.srcId);
+  // Vigor: "If damage would be dealt to another creature you control, prevent that damage. Put a +1/+1 counter on that creature for each 1 damage prevented"
+  function vigorFor(c) {
+    if (!c || c.s.pw) return null;
+    const [oid, kind, id] = String(c.v || "").split("|");
+    return Object.entries(room.players?.[oid]?.bf || {}).find(([vid, x]) => !(kind === "bf" && vid === id) && /if damage would be dealt to another creature you control, prevent that damage\. put a \+1\/\+1 counter on that creature for each 1 damage prevented this way/i.test(x.o || lookupCard(x.n)?.o || "")) || null;
+  }
   function crOutcome(c, n, dt) {
+    if (n > 0 && vigorFor(c)) return `prevented: ${n} +1/+1 counter${n === 1 ? "" : "s"} instead (${dispName(vigorFor(c)[1])})`;
     if (c.s.pw) return n >= c.s.t ? "dies" : `${c.s.t - n} loyalty left`;
     if (c.s.indestr) return "survives (indestructible)";
     const left = c.s.t - (c.s.dmg || 0);
@@ -3323,6 +3345,12 @@ function startController(code, pid) {
     const out = crOutcome(c, n, dt);
     logTo(code, `💥 ${me.name}'s ${src}: ${n} damage to ${c.o.name}'s ${c.s.name}${why ? ` (${why})` : ""} → ${out}`);
     const ix = idx === undefined || idx === "" ? -1 : Number(idx);
+    if (/^prevented/.test(out)) { // Vigor: the damage becomes +1/+1 counters (doublers, Shalai and Hallar and friends see them)
+      const vg = vigorFor(c), eff = { k: "countersOn", target: { kind, id }, n, key: "p1p1", label: "+1/+1" };
+      if (oid === pid) setTimeout(() => act([{ type: "effects", effs: [eff], times: 1, count: 1, src: dispName(vg[1]), srcId: vg[0] }]), 0);
+      else sendOrders({ [oid]: {} }, { how: "fx", effs: [eff], src: dispName(vg[1]) });
+      return out;
+    }
     if (!c.s.pw && n > 0) setTimeout(() => repercuss(oid, n, `${c.s.name} was dealt ${n}`), 0);
     if (/^dies/.test(out)) {
       sendOrders({ [oid]: { targets: [{ kind, id }] } }, { how: exile ? "exile" : "destroy", src, rider: "", lethal: true });
@@ -3344,8 +3372,8 @@ function startController(code, pid) {
     const a = crAmount(r, c);
     { const [, kd, tid] = v.split("|"), te = kd === "bf" ? room.players?.[oid]?.bf?.[tid] : null; const tn = te && String(te.fname || te.n).split(",")[0];
       if (te && tn && new RegExp(`^prevent all damage that would be dealt to (?:this creature|${tn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\.?$`, "im").test(te.o || lookupCard(te.n)?.o || "")) { a.n = 0; a.why = `${dispName(te)} prevents all damage dealt to it`; } }
-    dealCr(c, a.n, r.src, a.why, crDT(r, c), !!k.exile);
-    if (a.n > 0) lifelinkGain(r.llSrc || r.srcId, a.n, r.src);
+    const dOut = dealCr(c, a.n, r.src, a.why, crDT(r, c), !!k.exile);
+    if (a.n > 0 && !/^prevented/.test(dOut)) lifelinkGain(r.llSrc || r.srcId, a.n, r.src);
     if (k.ctrl) { // Shocker: "…and 2 damage to that creature's controller"
       const o = room.players?.[oid], hit = ampDmg(k.ctrl, (r.srcId && me.bf?.[r.srcId]) || lookupCard(r.src), oid !== pid);
       if (oid === pid) { if (!me.prot?.life) mutate(p => { p.life = (p.life ?? START_LIFE) - hit.n; }); logTo(code, `💥 ${r.src}: ${hit.n} damage to ${me.name}`); }
@@ -3753,7 +3781,7 @@ function startController(code, pid) {
   function lifelinkGain(srcId, n, label) {
     const e = srcId && me.bf?.[srcId]; if (!e || !(n > 0) || me.prot?.life) return;
     if (!kwsOf({ ...e, o: e.o || lookupCard(e.n)?.o }, pid, srcId).some(x => x.k === "lifelink")) return;
-    mutate(p => { p.life = (p.life ?? START_LIFE) + n; }); logTo(code, `💚 ${me.name}'s ${label || dispName(e)}: lifelink +${n} life`);
+    const ga = gainAdj(me, n, lookupCard); mutate(p => { p.life = (p.life ?? START_LIFE) + ga.n; }); logTo(code, `💚 ${me.name}'s ${label || dispName(e)}: lifelink +${ga.n} life${ga.why}`);
   }
   function payForCast(card, cost) {
     cost = String(cost || "");
@@ -4093,7 +4121,7 @@ function startController(code, pid) {
     const card = lookupCard(o.cardN) || Object.values(me.bf || {}).find(e => e.n === o.cardN);
     const ll = Object.entries(me.bf || {}).find(([id, e]) => e.n === o.cardN && kwsOf({ ...e, o: e.o || lookupCard(e.n)?.o }, pid, id).some(x => x.k === "lifelink"));
     const llTok = !ll && Object.entries(me.tokens || {}).find(([k, t]) => o.cardN === t.name && kwsOf(tokenPerm(t), pid, k, true).some(x => x.k === "lifelink"));
-    if ((ll || llTok) && o.dmg > 0 && !me.prot?.life) { const g = o.dmg * Math.max(1, o.times || 1); mutate(p => { p.life = (p.life ?? START_LIFE) + g; }); logTo(code, `💚 ${me.name}'s ${o.src}: lifelink +${g} life`); }
+    if ((ll || llTok) && o.dmg > 0 && !me.prot?.life) { const ga = gainAdj(me, o.dmg * Math.max(1, o.times || 1), lookupCard); mutate(p => { p.life = (p.life ?? START_LIFE) + ga.n; }); logTo(code, `💚 ${me.name}'s ${o.src}: lifelink +${ga.n} life${ga.why}`); }
     const big = card ? bigHitTriggers({ ...card, o: card.o || lookupCard(card.n)?.o }).filter(h => (o.dmg || 0) >= h.min).map(h => h.text) : [];
     const hitT = String(card?.t || Object.values(me.tokens || {}).find(t => t.name === o.cardN) && `Token Creature — ${o.cardN}` || "");
     const anyMine = Object.values(me.bf || {}).flatMap(x => String(x.o || lookupCard(x.n)?.o || "").split("\n").map(l => l.trim().match(/^whenever an? (nontoken |historic |artifact |legendary )?([A-Z][a-z]+|creature) you control deals combat damage to a player(?: or battle)?, (.+)$/i)).filter(m => m && !(/nontoken/i.test(m[1] || "") && /\bToken\b/.test(hitT)) && (!/historic/i.test(m[1] || "") || /\b(Legendary|Artifact|Saga)\b/.test(hitT)) && (!/artifact/i.test(m[1] || "") || /\bArtifact\b/.test(hitT)) && (!/legendary/i.test(m[1] || "") || /\bLegendary\b/.test(hitT)) && (/^creature$/i.test(m[2]) || new RegExp(`\\b${m[2]}\\b`, "i").test(hitT))).map(m => ({ text: m[3].replace(/create that many /i, `create ${o.dmg || 1} `), src: dispName(x) })));
@@ -4112,6 +4140,8 @@ function startController(code, pid) {
     { const key = `${room.turnNo || 0}:${o.victim || ""}`, hid = Object.entries(me.bf || {}).find(([, e]) => e.n === o.cardN)?.[0], he = hid && me.bf[hid];
       const base = he ? Number(lookupCard(he.n)?.p ?? he.p) : NaN, now = he ? Number(ptOf(he, countsFor(me), pid, hid).split("/")[0]) : NaN;
       if (he && now > base) Object.values(me.bf || {}).forEach(x => { const m = String(x.o || lookupCard(x.n)?.o || "").match(/^whenever one or more creatures you control each with power greater than its base power deals? combat damage to a player, (.+)$/im); if (m && !(hitOnce[dispName(x)] || []).includes(key)) { hitOnce[dispName(x)] = [...(hitOnce[dispName(x)] || []), key]; anyMine.push({ text: m[1], src: dispName(x) }); } }); }
+    { const hid = Object.entries(me.bf || {}).find(([, e]) => e.n === o.cardN)?.[0], he = hid && me.bf[hid]; // backup: abilities gained until end of turn
+      (he?.gainedEot || []).filter(g => g.turnNo === (room.turnNo || 0)).forEach(g => { const m = g.text.match(/^whenever this creature deals combat damage to a player, (.+)$/i); if (m) anyMine.push({ text: m[1].replace(/\bon it\b/i, `on ${dispName(he)}`), src: `${dispName(he)} (${g.src})` }); }); }
     const texts = [...(card ? hitTriggers({ ...card, o: card.o || lookupCard(card.n)?.o }) : []), ...big, ...anyMine];
     if (!texts.length) return;
     const o0 = o;
@@ -4121,6 +4151,9 @@ function startController(code, pid) {
       if (/roll a d20\. you create a number of treasure tokens equal to the result/i.test(text)) { for (let i = 0; i < times; i++) reminders.push({ id: newId(), src: o.src, text: "Roll a d20. You create a number of Treasure tokens equal to the result.", times: 1 }); setTimeout(render, 0); return; }
       if (/^put a \+1\/\+1 counter on (?:that creature|it)\.?$/i.test(text.trim())) { const hid = Object.entries(me.bf || {}).find(([, e]) => e.n === o.cardN)?.[0], tk = !hid && Object.entries(me.tokens || {}).find(([, t]) => t.name === o.cardN)?.[0];
         if (hid || tk) { mutate(p => { const x = hid ? p.bf?.[hid] : p.tokens?.[tk]; if (x) { x.c ||= {}; x.c.p1p1 = (x.c.p1p1 || 0) + 1; } }); logTo(code, `⚔ ${o.src}: +1/+1 counter (dealt combat damage)`); return; } }
+      // "Put that many +1/+1 counters on it" (Conclave Sledge-Captain, and creatures it backed up): that many = the combat damage dealt
+      if (/^put that many \+1\/\+1 counters on (?:it|that creature|this creature|[^.]+?)\.?$/i.test(text.trim()) && (o.dmg || 0) > 0) { const hid = Object.entries(me.bf || {}).find(([, e]) => e.n === o.cardN)?.[0];
+        if (hid) { const n = o.dmg * times; setTimeout(() => act([{ type: "effects", effs: [{ k: "countersOn", target: { kind: "bf", id: hid }, n, key: "p1p1", label: "+1/+1" }], times: 1, count: 1, src: item.src || o.src, srcId: hid }]), 0); logTo(code, `⚔ ${item.src || o.src}: ${n} +1/+1 counter${n === 1 ? "" : "s"} on ${dispName(me.bf[hid])} (combat damage)`); return; } }
       logTo(code, `⚔ ${me.name}'s ${o0.src} dealt combat damage to ${o.victim}${item.src ? ` (${item.src})` : ""}: ${text.replace(/\.$/, "")}${times > 1 ? ` (×${times})` : ""}`);
       const sp = spellAbility({ n: `${o.cardN} · combat damage · ${text.slice(0, 60)}`, t: "Instant", o: text });
       const effs = sp.auto ? sp.effs : sp.effs.filter(f => ["fetch", "remove", "edict", "regrow", "countersTarget", "countersEach", "pumpTarget", "pumpAll", "untapAll", "untapN", "ping", "gyhate", "tempt", "tgain", "gyOne", "impulse"].includes(f.k));
@@ -4644,7 +4677,7 @@ function startController(code, pid) {
       becameBlocked(o.cardN, o.src);
       const ll = Object.entries(me.bf || {}).find(([id, e]) => e.n === o.cardN && kwsOf({ ...e, o: e.o || lookupCard(e.n)?.o }, pid, id).some(x => x.k === "lifelink"))
         || Object.entries(me.tokens || {}).find(([k, t]) => o.cardN === t.name && kwsOf(tokenPerm(t), pid, k, true).some(x => x.k === "lifelink"));
-      if (ll && o.dmg > 0 && !me.prot?.life) { mutate(p => { p.life = (p.life ?? START_LIFE) + o.dmg; }); logTo(code, `💚 ${me.name}'s ${o.src}: lifelink +${o.dmg} life (dealt to ${o.victim})`); }
+      if (ll && o.dmg > 0 && !me.prot?.life) { const ga = gainAdj(me, o.dmg, lookupCard); mutate(p => { p.life = (p.life ?? START_LIFE) + ga.n; }); logTo(code, `💚 ${me.name}'s ${o.src}: lifelink +${ga.n} life (dealt to ${o.victim})${ga.why}`); }
       return;
     }
     if (o.how === "suspect") { suspectMine(o.kind, o.id, `${o.byName}'s ${o.src}`); return; }
@@ -6411,6 +6444,7 @@ function startController(code, pid) {
               : r.cumUp ? `<button class="btn small primary" data-a="cum-go" data-id="${r.id}" data-v="1">Paid${r.cumUp.life ? ` ${r.cumUp.life * r.cumUp.n} life` : ""}</button><button class="btn small" data-a="cum-go" data-id="${r.id}" data-v="0">🗡 Sacrifice it</button>`
               : /^you may untap (?:this|it)(?: artifact| creature| permanent| land| enchantment)?\.?$/i.test(r.text || "") && r.srcId && me.bf?.[r.srcId]?.tap ? `<button class="btn small primary" data-a="self-untap" data-id="${r.id}">↻ Untap ${esc(dispName(me.bf[r.srcId]))}</button>`
               : dig?.on && !r.ubDone && /reveal cards from the top of your library until you reveal a basic land card\. put that card into your hand and all other cards revealed this way into your graveyard/i.test(r.text || "") ? `<button class="btn small primary" data-a="dig-untilbasic" data-id="${r.id}">🂠 Reveal from my library</button>`
+              : /then you win the game if you control a creature with power 20 or greater/i.test(r.text || "") ? `<button class="btn small primary" data-a="aria-go" data-id="${r.id}">Resolve (power ${myMaxPower()} now)</button>`
               : r.exalted ? `<button class="btn small primary" data-a="exalted-go" data-id="${r.id}">It attacks alone: +${r.exalted.n}/+${r.exalted.n}</button>`
               : r.wheelAll ? `<button class="btn small primary" data-a="wheel-go" data-id="${r.id}">Tell the table</button>`
               : r.impLoss ? (() => { const l = Object.entries(room.casts || {}).filter(([, c]) => (c.turnNo || 0) === (room.turnNo || 0) && !c.countered && c.n !== r.src).reverse(); return l.length ? `<select class="fetch-pick" id="imp-${r.id}">${l.map(([k, c]) => `<option value="${esc(k)}">${esc(castLabel(c))} (MV ${manaValue(c.m || "")})</option>`).join("")}</select><button class="btn small primary" data-a="imp-go" data-id="${r.id}">Retargeted: lose the life</button>` : `<span class="mini">No spell on the stack (in the app).</span>`; })()
@@ -7725,6 +7759,8 @@ function startController(code, pid) {
           const byOwner = {};
           list.forEach(({ v: tv, n }) => { const [oid, kind, id] = tv.split("|"); (byOwner[oid] ||= []).push({ k: "countersOn", target: { kind, id }, n, key: f.key, label: f.label }); if (f.kws?.length && kind === "bf") byOwner[oid].push({ k: "pumpOn", target: { kind, id }, dp: 0, dt: 0, kws: f.kws }); });
           counterPutTriggers(list.map(({ v: tv, n }) => ({ oid: tv.split("|")[0], n })));
+          if (r.backup?.lines?.length) list.forEach(({ v: tv }) => { const [oid, kind, id] = tv.split("|"); if (oid === pid && kind === "bf" && id !== r.srcId) { const tn = room.turnNo || 0;
+            mutate(p => { const x = p.bf?.[id]; if (x) x.gainedEot = [...(x.gainedEot || []).filter(g => g.turnNo === tn), ...r.backup.lines.map(text => ({ text, turnNo: tn, src: r.backup.src }))]; }); logTo(code, `⚙ ${dispName(me.bf[id])} gains until end of turn (${r.backup.src}): ${r.backup.lines.join(" ")}`); } });
           Object.entries(byOwner).forEach(([oid, effs]) => {
             if (oid === pid) act([{ type: "effects", effs, times: 1, count: 1, src: r.src, srcId: r.srcId }]);
             else { sendOrders({ [oid]: {} }, { how: "fx", effs, src: r.src }); logTo(code, `${me.name}: ${r.src} → counters on ${room.players?.[oid]?.name || "?"}'s creature`); }
@@ -9197,6 +9233,18 @@ function startController(code, pid) {
         if (out.length) mutate(p => out.forEach(c => toZone(p, { n: c.n, t: c.t || "", m: c.m || "", ...(c.o ? { o: c.o } : {}) }, "gy")));
         logTo(code, `${me.name}'s ${r.src}: ${out.length} card${out.length === 1 ? "" : "s"} to the graveyard${basic ? `, ${basic} to hand` : " — no basic land, the whole library is gone"}`);
         reminders = reminders.filter(x => x !== r); renderHand(); render(); break; }
+      case "aria-go": { // counters at power 5+, then 10 life at 10+, then the win at 20+
+        const r = reminders.find(x => x.id === b.dataset.id); if (!r) break;
+        reminders = reminders.filter(x => !(x.src === r.src && /power (?:5|20) or greater/i.test(x.text || "")));
+        const p0 = myMaxPower();
+        if (p0 >= 5) { const ids = Object.entries(me.bf || {}).filter(([, e]) => /\bCreature\b/.test(e.t || lookupCard(e.n)?.t || "")).map(([id]) => id);
+          act([{ type: "effects", effs: ids.map(id => ({ k: "countersOn", target: { kind: "bf", id }, n: 1, key: "p1p1", label: "+1/+1" })), times: 1, count: 1, src: r.src, srcId: r.srcId }]); }
+        else logTo(code, `⚙ ${r.src}: no creature with power 5 or greater (biggest ${p0})`);
+        setTimeout(() => { const p1 = myMaxPower();
+          if (p1 >= 10) act([{ type: "effects", effs: [{ k: "gain", n: 10 }], times: 1, count: 1, src: r.src, srcId: r.srcId }]);
+          if (p1 >= 20) { logTo(code, `🎵 ${me.name}'s ${r.src}: a creature with power ${p1}`); declareWin(r.src); }
+          render(); }, 120);
+        break; }
       case "exalted-go": { const r = reminders.find(x => x.id === b.dataset.id), x = r?.exalted; if (!x) break; reminders = reminders.filter(y => y !== r);
         const tag = `ex${Date.now().toString(36)}`;
         mutate(p => { p.eot ||= {}; if (x.kind === "bf") { if (p.bf?.[x.id]) p.eot[tag] = { src: `exalted ×${x.n}`, target: x.id, dp: x.n, dt: x.n, kws: [] }; }
