@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018a";
+import { firebaseConfig } from "./config.js?v=20261018b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -752,10 +752,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18a";
+const APP_VERSION = "2026.10.18b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3327,6 +3327,7 @@ function startController(code, pid) {
     { const [, kd, tid] = v.split("|"), te = kd === "bf" ? room.players?.[oid]?.bf?.[tid] : null; const tn = te && String(te.fname || te.n).split(",")[0];
       if (te && tn && new RegExp(`^prevent all damage that would be dealt to (?:this creature|${tn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\.?$`, "im").test(te.o || lookupCard(te.n)?.o || "")) { a.n = 0; a.why = `${dispName(te)} prevents all damage dealt to it`; } }
     dealCr(c, a.n, r.src, a.why, crDT(r, c), !!k.exile);
+    if (a.n > 0) lifelinkGain(r.llSrc || r.srcId, a.n, r.src);
     if (k.ctrl) { // Shocker: "…and 2 damage to that creature's controller"
       const o = room.players?.[oid], hit = ampDmg(k.ctrl, (r.srcId && me.bf?.[r.srcId]) || lookupCard(r.src), oid !== pid);
       if (oid === pid) { if (!me.prot?.life) mutate(p => { p.life = (p.life ?? START_LIFE) - hit.n; }); logTo(code, `💥 ${r.src}: ${hit.n} damage to ${me.name}`); }
@@ -3720,6 +3721,22 @@ function startController(code, pid) {
     return { took, left };
   }
   // 💸 casting a spell: take what I can from a tracked mana pool, and ask how each Phyrexian symbol was paid
+  // 💚 lifelink on damage that isn't combat (pings, "deals N damage" abilities): you gain that much, which fires "whenever you gain life"
+  // a creature of mine dealt damage to an opponent outside combat: "whenever this / enchanted / equipped creature deals damage to an opponent"
+  function noncombatHit(srcId, n, victim) {
+    const e = srcId && me.bf?.[srcId]; if (!e) return;
+    const P = "^(?:[^\\n—]{1,40} — )?whenever ";
+    const T = " deals damage to (?:an opponent|a player|one of your opponents)(?: or a planeswalker)?, ([^\\n]+)$";
+    const own = String(e.o || lookupCard(e.n)?.o || "").match(new RegExp(P + selfRef(e) + T, "im"));
+    if (own) fxRem(dispName(e), srcId, own[1], /\bdraw a card\b/i.test(own[1]) ? { drawN: 1 } : {});
+    Object.entries(me.bf || {}).filter(([, a]) => a.att === srcId).forEach(([aid, a]) => { const m = String(a.o || lookupCard(a.n)?.o || "").match(new RegExp(P + "(?:enchanted|equipped) creature" + T, "im")); if (m) fxRem(dispName(a), aid, `${dispName(e)} dealt damage to ${victim}: ${m[1]}`, /\bdraw a card\b/i.test(m[1]) ? { drawN: 1 } : {}); });
+    setTimeout(render, 0);
+  }
+  function lifelinkGain(srcId, n, label) {
+    const e = srcId && me.bf?.[srcId]; if (!e || !(n > 0) || me.prot?.life) return;
+    if (!kwsOf({ ...e, o: e.o || lookupCard(e.n)?.o }, pid, srcId).some(x => x.k === "lifelink")) return;
+    mutate(p => { p.life = (p.life ?? START_LIFE) + n; }); logTo(code, `💚 ${me.name}'s ${label || dispName(e)}: lifelink +${n} life`);
+  }
   function payForCast(card, cost) {
     cost = String(cost || "");
     if (me.pool && Object.keys(me.pool).length && cost.replace(/\{[^}]*\/P\}/g, "")) payPool(cost.replace(/\{[^}]*\/P\}/g, ""), dispName(card));
@@ -4039,9 +4056,9 @@ function startController(code, pid) {
     const red = /\{[^}]*R[^}]*\}/.test(srcCard?.m || "") || /\bred\b/i.test(srcCard?.desc || "");
     Object.entries(me.bf || {}).forEach(([id, x]) => { const t = String(x.o || lookupCard(x.n)?.o || "");
       if (/^(?:[^—\n]{1,40} — )?whenever an opponent is dealt damage, put that many \+1\/\+1 counters/im.test(t)) warCredit[victim] = (warCredit[victim] || 0) + n;
-      if (/^(?:[^—\n]{1,40} — )?whenever an opponent is dealt damage, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im.test(t)) { mutate(p => { const e = p.bf?.[id]; if (e) { e.c ||= {}; e.c.p1p1 = (e.c.p1p1 || 0) + n; } }); logTo(code, `⚙ ${me.name}'s ${dispName(x)}: ${victim} was dealt ${n} damage (${srcLabel}) → +${n} +1/+1 counter${n === 1 ? "" : "s"}`); }
+      if (/^(?:[^—\n]{1,40} — )?whenever an opponent is dealt damage, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im.test(t)) { setTimeout(() => act([{ type: "effects", effs: [{ k: "countersOn", target: { kind: "bf", id }, n: n, key: "p1p1", label: "+1/+1" }], times: 1, count: 1, src: dispName(x), srcId: id }]), 0); logTo(code, `⚙ ${me.name}'s ${dispName(x)}: ${victim} was dealt ${n} damage (${srcLabel}) → +${n} +1/+1 counter${n === 1 ? "" : "s"}`); }
       if (/^(?:[^—\n]{1,40} — )?whenever a source you control deals damage to an opponent, you may put a (\w+) counter on this [a-z]+\.?$/im.test(t)) { const k = t.match(/^(?:[^—\n]{1,40} — )?whenever a source you control deals damage to an opponent, you may put a (\w+) counter/im)[1].toLowerCase(); mutate(p => { const e = p.bf?.[id]; if (e) { e.c ||= {}; e.c[k] = (e.c[k] || 0) + 1; } }); logTo(code, `⚙ ${me.name}'s ${dispName(x)}: ${srcLabel} damaged ${victim} → +1 ${k} counter`); }
-      if (red && /^(?:[^—\n]{1,40} — )?whenever a red source you control deals damage to one or more permanents and\/or players, put a \+1\/\+1 counter on [^.]+\.?$/im.test(t)) { mutate(p => { const e = p.bf?.[id]; if (e) { e.c ||= {}; e.c.p1p1 = (e.c.p1p1 || 0) + 1; } }); logTo(code, `⚙ ${me.name}'s ${dispName(x)}: red source ${srcLabel} dealt damage → +1 +1/+1 counter`); }
+      if (red && /^(?:[^—\n]{1,40} — )?whenever a red source you control deals damage to one or more permanents and\/or players, put a \+1\/\+1 counter on [^.]+\.?$/im.test(t)) { setTimeout(() => act([{ type: "effects", effs: [{ k: "countersOn", target: { kind: "bf", id }, n: 1, key: "p1p1", label: "+1/+1" }], times: 1, count: 1, src: dispName(x), srcId: id }]), 0); logTo(code, `⚙ ${me.name}'s ${dispName(x)}: red source ${srcLabel} dealt damage → +1 +1/+1 counter`); }
     });
   }
   // My creature dealt combat damage to a player: its "whenever … deals combat damage to a player" triggers
@@ -8406,7 +8423,9 @@ function startController(code, pid) {
         if (am.why) logTo(code, `🔥 ${r.src}: ${k.n} → ${am.n} damage (${am.why})`);
         const effs = [...(o ? [{ k: "tlose", n: am.n, target: oid, targetName: o.name }] : []), ...(r.thenEffs || [])];
         if (o && oid !== pid) { commitCrime("damage"); dmgToOpp(am.n, srcCard, r.src, o.name); setTimeout(() => { deliriumPunish({ [oid]: am.n }); render(); }, 0); }
-        if (!o) reminders.push({ id: newId(), src: r.src, srcId: r.srcId, text: `Deal ${k.n} damage to target creature or planeswalker.`, times: 1, crDmg: { n: k.n, pw: true, cr: true } });
+        if (!o) reminders.push({ id: newId(), src: r.src, srcId: r.srcId, text: `Deal ${k.n} damage to target creature or planeswalker.`, times: 1, crDmg: { n: k.n, pw: true, cr: true }, llSrc: r.srcId });
+        if (o && am.n > 0) lifelinkGain(r.srcId, am.n, r.src); // Walking Ballista with Heliod's lifelink
+        if (o && oid !== pid && am.n > 0) noncombatHit(r.srcId, am.n, o.name); // Niv-Mizzet + Curiosity
         if (effs.length) act([{ type: "effects", effs, times: 1, count: 1, src: r.src, srcId: r.srcId }]);
         else render();
         break;
