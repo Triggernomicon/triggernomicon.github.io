@@ -2441,6 +2441,19 @@ export function detectCombos(p, lookup, ctx = {}) {
           desc: `Tap ${rk.n} (${out1.n} mana), cast ${y.n} (${y.mv}): ${hh.n} returns ${rk.n} to your hand. Recast ${rk.n} (${rc}): ${hh.n} returns ${y.n}. Two spells per loop${net > 0 ? `, +${net} ${out1.colorless ? "colorless " : ""}mana each time: infinite mana, storm and cast triggers` : ": infinite storm count and cast triggers (no mana left over)"}.` });
         break;
       } } }
+  // Thassa's Oracle wins (cards known to be in the digital hand): Demonic Consultation / Tainted Pact exile the library, Hermit Druid mills it when no basics are left
+  { const inHand = n => (ctx.hand || []).includes(n);
+    if (inHand("Thassa's Oracle")) {
+      const libBasics = ctx.lib ? ctx.lib.filter(n => /\bBasic\b/.test(lookup(n)?.t || "") && /\bLand\b/.test(lookup(n)?.t || "")).length : null;
+      const dupes = ctx.lib ? ctx.lib.length - new Set(ctx.lib).size : null;
+      if (inHand("Demonic Consultation")) out.push({ key: "named:Demonic Consultation+Thassa's Oracle", name: "Demonic Consultation + Thassa's Oracle", pieces: ["Demonic Consultation", "Thassa's Oracle"], win: true, kind: "info",
+        desc: "Cast Demonic Consultation naming Thassa's Oracle (it's in your hand, so your whole library is exiled), then cast Thassa's Oracle: with your library empty, you win." });
+      if (inHand("Tainted Pact")) out.push({ key: "named:Tainted Pact+Thassa's Oracle", name: "Tainted Pact + Thassa's Oracle", pieces: ["Tainted Pact", "Thassa's Oracle"], win: true, kind: "info",
+        desc: `Cast Tainted Pact and keep exiling: with no two cards in your library sharing a name, it exiles the whole library. Then cast Thassa's Oracle: you win.${dupes ? ` Careful: ${dupes} card${dupes === 1 ? " shares" : "s share"} a name in your library (basics count), so Pact stops early.` : ""}` });
+      const hd = ents.find(x => /^\{G\}, \{T\}: Reveal cards from the top of your library until you reveal a basic land card\. Put that card into your hand and all other cards revealed this way into your graveyard\.?$/im.test(x.o));
+      if (hd && (libBasics === null || libBasics === 0)) out.push({ key: `named:${hd.n}+Thassa's Oracle`, name: `${hd.n} + Thassa's Oracle`, pieces: [hd.n, "Thassa's Oracle"], win: true, kind: "info",
+        desc: `Activate ${hd.n} ({G}, tap; it can't be summoning sick): with no basic lands left in your library, every card goes to your graveyard. Then cast Thassa's Oracle: you win.${libBasics === null ? " Only once your basic lands are out of the library." : ""}` });
+    } }
   // Storm-Kiln Artist + Haze of Rage: buyback Haze with 3+ spells before it makes 4+ Treasures, enough to cast it again
   { const kiln = pick(/whenever you cast or copy an instant or sorcery spell, create a treasure token/i)[0];
     if (kiln && handOrCast("Haze of Rage")) out.push({ key: `named:${kiln.n}+Haze of Rage`, name: `${kiln.n} + Haze of Rage`, pieces: [kiln.n, "Haze of Rage"], win: false, kind: "info",

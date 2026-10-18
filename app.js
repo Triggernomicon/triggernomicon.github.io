@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018f";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018f";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018f";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018f";
+import { firebaseConfig } from "./config.js?v=20261018g";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018g";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018g";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos } from "./engine.js?v=20261018g";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -753,10 +753,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18f";
+const APP_VERSION = "2026.10.18g";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018f" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018g" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -2407,10 +2407,11 @@ function startController(code, pid) {
   // Thassa's Oracle: X is your devotion when the trigger resolves (so a bounce in response lowers it)
   function oracleBox(r) {
     const x = devotion(me)[r.oracle.color] || 0;
+    const L = dig?.on ? dig.lib.length : null; // the digital library knows how many are left
     return `<span class="mini">X right now = <b>${x}</b> (devotion to ${esc(r.oracle.colorName)})</span>
-      <label class="mini">Cards left in library <input type="number" min="0" inputmode="numeric" class="x-input" id="or-${r.id}"></label>
+      <label class="mini">Cards left in library <input type="number" min="0" inputmode="numeric" class="x-input" id="or-${r.id}"${L != null ? ` value="${L}"` : ""}></label>
       <button class="btn small primary" data-a="oracle-go" data-id="${r.id}">Resolve</button>
-      <button class="btn small" data-a="oracle-go" data-id="${r.id}" data-empty="1">Library is empty</button>`;
+      ${L == null || L === 0 ? `<button class="btn small" data-a="oracle-go" data-id="${r.id}" data-empty="1">Library is empty</button>` : ""}`;
   }
   // The Ring tempts you: pick (or keep) a Ring-bearer
   function ringBox(r) {
@@ -2457,6 +2458,7 @@ function startController(code, pid) {
         if (isSick(full, meOwner(), bid) && !confirm(`${dispName(e)} is summoning sick (it came under your control this turn).\n\nAttack anyway?`)) return;
         const vig = kwsOf(full, pid, bid).some(x => x.k === "vigilance");
         logTo(code, `${me.name}: ${dispName(e)} attacks`);
+        exaltedCheck({ kind: "bf", id: bid, name: dispName(e) });
         act([{ type: "attacks", id: bid, t: e.t || "", kws: kwsOf(full, pid, bid).map(x => x.k) }, ...(!vig && !e.tap ? [{ type: "tapped", id: bid }] : []), ...youAttackEv()], p => { if (!vig) p.bf[bid].tap = true; markAttacked(p, "bf", bid, 1); p.youAtk = combatKey(); });
         if ((e.c?.p1p1 || 0) > 0) { const by = Object.values(me.bf || {}).filter(x => /whenever a creature you control with a \+1\/\+1 counter on it attacks, double the number of \+1\/\+1 counters on it/i.test(x.o || lookupCard(x.n)?.o || "")).length;
           if (by) { act([], p => { const x = p.bf?.[bid]; if (x?.c?.p1p1) x.c.p1p1 *= 2 ** by; }); logTo(code, `⚔ ${dispName(e)}'s +1/+1 counters doubled (Byrke)`); } }
@@ -2989,6 +2991,8 @@ function startController(code, pid) {
         if (sp.auto) { const th = sents.filter(x => /^then (?:you )?(?:put|return)\b/i.test(x)); if (th.length && !sp.effs.some(f => /regrow|reanimate|fetch|necro/i.test(f.k))) reminders.push({ id: newId(), src: dispName(card), text: th.map(x => x.replace(/^then /i, "").replace(/^\w/, c => c.toUpperCase())).join(" "), times: 1 }); }
         const fresh = reminders.some(x => !snap.has(x.id));
         if (simple.length && !sp.auto && sp.effs.some(f => f.k === "tok") && !effs.some(f => f.k === "tok")) { const ts = sents.find(x => /\bcreate\b/i.test(x)); reminders.push({ id: newId(), src: dispName(card), text: (ts || "Create the tokens.").replace(/^\w/, c => c.toUpperCase()), times: 1, effs: sp.effs.filter(f => f.k === "tok") }); }
+        { const lt = !simple.length && !sp.effs.some(f => /^draw|adnaus|rummage|tdraw/.test(f.k)) && sents.map(x => x.match(/^draw (a|one|two|three|four|\d+) cards?, then discard/i)).find(Boolean); // looting: Frantic Search, Faithless Looting
+          if (lt) reminders.push({ id: newId(), src: dispName(card), text: `Draw ${lt[1] === "a" ? "a card" : `${lt[1]} cards`}.`, times: 1, drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4 })[lt[1].toLowerCase()] || Number(lt[1]) }); }
         if (simple.length && !sp.effs.some(f => /^draw|adnaus|rummage|tdraw/.test(f.k))) reminders.push({ id: newId(), src: dispName(card), text: simple.map(x => x.replace(/^\w/, c => c.toUpperCase())).join(" "), times: 1, ...(dm ? { drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4 })[dm[1].toLowerCase()] || Number(dm[1]) } : {}) });
         else if ((!sp.auto || (effs.length && effs.every(f => f.k === "extraCombat"))) && !sp.noRemind && !fresh && (!effs.length || effs.every(f => f.k === "extraCombat" || (f.k === "tok" && f.lead))) && !ctr?.spell && !wr && !le && !pc && !/^prevent all combat damage that would be dealt this turn\.?$/im.test(card.o)) reminders.push({ id: newId(), src: dispName(card), text: sents.join(" "), times: 1 });
       }
@@ -3121,6 +3125,14 @@ function startController(code, pid) {
     const own = (tableLose.some(f => permanentMatches(e, f)) ? [] : ownKeywords(e)).filter(k => k === "prowess").length;
     const granted = new Set(buffsOn(e, pid, id, isToken).kws.filter(x => x.k === "prowess").map(x => x.src)).size;
     return own + granted;
+  }
+  // Exalted (Noble Hierarch, Sublime Archangel's "other creatures have exalted" isn't counted): on the first attacker of a combat,
+  // offer "+N/+N if it attacks alone" — the app can't know yet whether more attackers follow
+  function exaltedCheck(who) {
+    if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted); return; } // a second attacker: not alone
+    const n = Object.values(me.bf || {}).reduce((s, x) => s + (String(x.o || lookupCard(x.n)?.o || "").match(/^Exalted\b/gm) || []).length, 0);
+    if (!n) return;
+    reminders.push({ id: newId(), src: n > 1 ? `Exalted ×${n}` : "Exalted", text: `If ${who.name} attacks alone, it gets +${n}/+${n} until end of turn.`, times: 1, exalted: { ...who, n } });
   }
   function prowess(card) {
     if (!card || /\bCreature\b/.test(card.t || "") || /\bLand\b/.test(card.t || "")) return;
@@ -3799,7 +3811,9 @@ function startController(code, pid) {
       const n = Object.values(me.gy || {}).filter(c => /\bCreature\b/.test(c.t || lookupCard(c.n)?.t || "") && (!col || new RegExp(col).test(c.m || lookupCard(c.n)?.m || ""))).length;
       if (n) out.push(`${m[2].repeat(n)}@${m[1]}`); });
     o.split("\n").forEach(l => { const m = l.match(/^\{T\}, Pay (\d+) life: Add ((?:\{[WUBRGC]\})+)\.( If that mana is spent on a creature spell, it gains haste\.)?/i); if (m) out.push(`${m[2]}~${m[1]}${m[3] ? "^h" : ""}`); });
-    { const pc = o.match(/^\{T\}: Add (\{[WUBRGC]\}) for each (\w+) counter on (?:this|it)[^.\n]*\./im); const n = pc ? e.c?.[pc[2].toLowerCase()] || 0 : 0; if (n) out.push(pc[1].repeat(n)); }
+    { const pc = o.match(/^\{T\}: Add (\{[WUBRGC]\}) for each ([+\-\w/]+) counter on (?:this|it)[^.\n]*\./im); const key = pc && (pc[2] === "+1/+1" ? "p1p1" : pc[2] === "-1/-1" ? "m1m1" : pc[2].toLowerCase()); const n = pc ? e.c?.[key] || 0 : 0; if (n) out.push(pc[1].repeat(n)); } // Gyre Sage: "for each +1/+1 counter"
+    // Kami of Whispered Hopes: "Add X mana of any one color, where X is this creature's power"
+    if (/^\{T\}: Add X mana of any one color, where X is (?:this creature's|its) power\.?$/im.test(o)) { const pw = Number(String(ptOf(e, countsFor(me), pid, eid) || "").split("/")[0]) || 0; if (pw > 0) ["W", "U", "B", "R", "G"].forEach(c => out.push(`{${c}}`.repeat(pw))); }
     o.split("\n").forEach(l => { const m = l.replace(/\([^)]*\)/g, "").trim().match(/^((?:\{[^}T]+\})+), \{T\}: Add (one mana of any color|(?:\{[WUBRGC]\})+(?:, (?:\{[WUBRGC]\})+)*(?:,? or (?:\{[WUBRGC]\})+)?)\.?$/i); if (m) (/any color/i.test(m[2]) ? ["any"] : m[2].split(/,? or |, /)).forEach(x => out.push(`${x}@${m[1]}`)); });
     // creatures that tap for mana because of other cards
     grantedCreatureMana(false, e.t || lookupCard(e.n)?.t || "", e, eid).forEach(x => out.push(x));
@@ -3857,7 +3871,7 @@ function startController(code, pid) {
   // When I cast: use up a rider that applies to this spell
   // ----- Infinite combos on my board -----
   let combosSeen = new Set();
-  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { hand: dig?.on ? [...dig.hand] : [], cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
+  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { hand: dig?.on ? [...dig.hand] : [], lib: dig?.on ? [...dig.lib] : null, cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
   function announceCombos() {
     const list = myCombos(), keys = new Set(list.map(c => c.key));
     list.filter(c => !combosSeen.has(c.key)).forEach(c => { logTo(code, `♾ ${me.name} has an infinite combo: ${c.name}${c.win ? " — that wins the game" : ""}`); toast(`♾ Infinite combo: ${c.name}`); });
@@ -6239,7 +6253,7 @@ function startController(code, pid) {
     $("remBox").innerHTML = `${reminders.filter(r => r.resolveOrder).length > 1 ? `<div class="order-banner">🔀 These triggered at the same time. Tap <b>▶ Resolve</b> in the order you want them to happen.</div>` : ""}${room.control ? `<div class="ctl-bar">${esc(controlText(room.control))}${room.control.target === pid && room.control.active ? " · do what they say this turn" : ""}</div>` : ""}${rulesStrip()}${room.winner ? `<div class="win-box">🏆 <b>${esc(room.winner.name)}</b> wins the game! (${esc(room.winner.src)})</div>` : ""}${comboBox()}${responseBox()}${notesBox()}${reminders.length ? `<div class="reminders">${reminders.slice(-4).map(r => `
         <div class="reminder">${(targetSrcColors = remSrcColors(r), "")}
           <div><b class="rsrc">⚙ ${esc(r.src)}</b>${r.times > 1 ? ` ×${r.times}` : ""}: ${r.oppPick ? esc(opLabel(r.oppPick)) : ""}${r.effs?.some(f => f.k === "setlife") ? esc(r.effs.find(f => f.k === "setlife").label.replace(/^\w/, c => c.toUpperCase())) : r.effs?.some(f => f.k === "remove") ? removeLabel(r.effs.find(f => f.k === "remove"), r) : r.effs?.some(f => f.k === "adnaus") ? adnLabel(r) : r.effs?.some(f => f.k === "airbend") ? airLabel(r.effs.find(f => f.k === "airbend")) : r.modes ? `Choose ${r.pick === "multi" ? "one or more" : r.pick}${r.times > 1 ? " (each time)" : ""}:` : r.fetch ? `Search for ${r.fetch.desc === "card" ? (r.fetch.n > 1 ? `up to ${r.fetch.n} cards` : "any card") : `${r.fetch.n > 1 ? `up to ${r.fetch.n} ` : r.fetch.n === "X" ? "X " : "a "}${esc(r.fetch.desc)} card${r.fetch.n !== 1 ? "s" : ""}`}${r.fetch.dest === "hand" ? " → hand" : r.fetch.dest === "top" ? " → top of library" : r.fetch.dest === "graveyard" ? " → graveyard" : ""}` : r.mana ? `Add ${manaHtml(r.mana.n <= 10 ? r.mana.syms.repeat(r.mana.n) : r.mana.syms)}${r.mana.n > 10 ? ` × ${r.mana.n}` : ""}` : esc(r.text)}${r.note ? `<div class="mini">${esc(r.note)}</div>` : ""}${baseSetBtn(r)}${consultBox(r)}${digExtras(r.impulse || r.instead ? "" : digTextOf(r), `data-id="${r.id}"`, "r" + r.id, !!(r.drawN || drawCount(r.text)) && !r.effs?.length)}</div>
-          ${copyHostBar(r)}${wheelBar(r)}${coinBar(r)}${diceBar(r)}${radBar(r)}${discoverBar(r)}${sephNote(r)}${exploreBar(r)}${enteredNote(r)}<div class="row">
+          ${copyHostBar(r)}${wheelBar(r)}${selfDrawBar(r)}${coinBar(r)}${diceBar(r)}${radBar(r)}${discoverBar(r)}${sephNote(r)}${exploreBar(r)}${enteredNote(r)}<div class="row">
             ${r.pact ? `<button class="btn small primary" data-a="pact-paid" data-id="${r.id}">Paid ${esc(r.pact.cost)}</button>
                 <button class="btn small" data-a="pact-lose" data-id="${r.id}">Can't pay → I lose</button>`
               : r.loseFx === "you" ? `<button class="btn small" data-a="lose-me" data-id="${r.id}">💀 I lose</button>`
@@ -6396,6 +6410,8 @@ function startController(code, pid) {
               : r.gyToBf ? (() => { const l = r.gyToBf.filter(([g]) => me.gy?.[g]); return l.length ? `<select class="fetch-pick" id="g2b-${r.id}">${l.map(([g, n]) => `<option value="${g}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" data-a="g2b-go" data-id="${r.id}">Onto the battlefield</button>` : `<span class="mini">None of them are still in your graveyard.</span>`; })()
               : r.cumUp ? `<button class="btn small primary" data-a="cum-go" data-id="${r.id}" data-v="1">Paid${r.cumUp.life ? ` ${r.cumUp.life * r.cumUp.n} life` : ""}</button><button class="btn small" data-a="cum-go" data-id="${r.id}" data-v="0">🗡 Sacrifice it</button>`
               : /^you may untap (?:this|it)(?: artifact| creature| permanent| land| enchantment)?\.?$/i.test(r.text || "") && r.srcId && me.bf?.[r.srcId]?.tap ? `<button class="btn small primary" data-a="self-untap" data-id="${r.id}">↻ Untap ${esc(dispName(me.bf[r.srcId]))}</button>`
+              : dig?.on && !r.ubDone && /reveal cards from the top of your library until you reveal a basic land card\. put that card into your hand and all other cards revealed this way into your graveyard/i.test(r.text || "") ? `<button class="btn small primary" data-a="dig-untilbasic" data-id="${r.id}">🂠 Reveal from my library</button>`
+              : r.exalted ? `<button class="btn small primary" data-a="exalted-go" data-id="${r.id}">It attacks alone: +${r.exalted.n}/+${r.exalted.n}</button>`
               : r.wheelAll ? `<button class="btn small primary" data-a="wheel-go" data-id="${r.id}">Tell the table</button>`
               : r.impLoss ? (() => { const l = Object.entries(room.casts || {}).filter(([, c]) => (c.turnNo || 0) === (room.turnNo || 0) && !c.countered && c.n !== r.src).reverse(); return l.length ? `<select class="fetch-pick" id="imp-${r.id}">${l.map(([k, c]) => `<option value="${esc(k)}">${esc(castLabel(c))} (MV ${manaValue(c.m || "")})</option>`).join("")}</select><button class="btn small primary" data-a="imp-go" data-id="${r.id}">Retargeted: lose the life</button>` : `<span class="mini">No spell on the stack (in the app).</span>`; })()
               : r.moxD ? `${digDiscardSel("discard a land card", "mxd-" + r.id)}<button class="btn small primary" data-a="moxd-go" data-id="${r.id}" data-v="1">Discarded a land</button><button class="btn small" data-a="moxd-go" data-id="${r.id}" data-v="0">Didn't → graveyard</button>`
@@ -6529,7 +6545,7 @@ function startController(code, pid) {
       <section class="card">
         <div class="card-head"><h3>Battlefield</h3><button class="btn small ${trackMana ? "on" : ""}" data-a="mana-mode" title="Show ⚡ buttons that tap for mana into your mana pool">🔋 ${trackMana ? "Mana: on" : "Mana: off"}</button>${entries.some(([, e]) => e.tap) || Object.values(me.tokens || {}).some(t => t.tapped) ? `<button class="btn small" data-a="untap-all">Untap all</button>` : ""}</div>
         ${entries.length ? groups.map(([g, label]) => {
-          const list = entries.filter(([, e]) => group(e) === g).sort((a, b) => a[1].n.localeCompare(b[1].n));
+          const list = entries.filter(([, e]) => group(e) === g).sort((a, b) => String(a[1].n || "").localeCompare(String(b[1].n || "")));
           return list.length ? `<div class="grp-title">${label} (${list.length})</div>${list.map(([id, e]) => permRow(id, e)).join("")}` : "";
         }).join("") : phasedList().length ? "" : `<p class="muted">Nothing here yet. Search your deck above to play a card.</p>`}
         ${phasedList().length ? `<div class="grp-title">👻 Phased out (${phasedList().length})</div><p class="mini">Still yours, but treated as though they don't exist until they phase in at your next untap step.</p>${phasedList().map(n => `<div class="perm phased"><div class="perm-row"><span class="who">${n.cmd ? "⭐ " : ""}${esc(n.label)}</span><span class="att-tag">👻 Phased out</span></div></div>`).join("")}<button class="btn small" data-a="phase-in">Phase in now</button>` : ""}
@@ -6715,6 +6731,19 @@ function startController(code, pid) {
     return `<div class="row">${host ? `<button class="btn small primary" data-a="copyhost-go" data-id="${r.id}" data-k="copy">Paid ${manaHtml(m[1])}: copy ${esc(dispName(host))}</button>` : `<span class="mini muted">Not attached to a creature you control.</span>`}
       <button class="btn small" data-a="copyhost-go" data-id="${r.id}" data-k="alt">Make ${esc(m[2])}</button></div>`;
   }
+  // "Draw N cards" inside a longer text (Brainstorm, Opt, Preordain, Frantic Search, looting): a Drew button that records the draws
+  // (Psychosis Crawler, Ageless Insight, Niv-Mizzet see them) and keeps the reminder for the rest. The digital hand has its own buttons.
+  const SELF_DRAW_N = "(a|an|one|two|three|four|five|six|seven|\\d+)";
+  function selfDrawN(r) {
+    if (dig?.on || r.selfDrew || r.punish || r.drawN || r.combo) return 0;
+    const t = String(r.text || "").replace(/\([^)]*\)/g, "");
+    if (drawCount(t) && !r.effs?.length) return 0; // the usual Drew button already shows
+    if (r.effs?.some(f => /draw|rummage|wheel/i.test(f.k))) return 0;
+    if (/\b(?:each|target|that|an?) (?:player|opponent)s? (?:may )?draws?\b|\bdraws? cards? equal\b|\bfor each\b[^.]*\bdraw\b/i.test(t)) return 0;
+    const m = t.match(new RegExp(`(?:^|[.,:—]\\s*|\\bthen |\\byou may )draw ${SELF_DRAW_N} (?:additional )?cards?\\b`, "i"));
+    return m ? numW(m[1]) || 1 : 0;
+  }
+  function selfDrawBar(r) { const n = selfDrawN(r); return n ? `<div class="row"><button class="btn small primary" data-a="self-drew" data-id="${r.id}" data-n="${n}" title="Record the draws so draw triggers fire">🂠 Drew ${n}</button></div>` : ""; }
   function wheelBar(r) {
     if (!WHEEL_ATK.test(r.text || "")) return "";
     const thatMany = /draw that many cards/i.test(r.text), handN = dig?.on ? dig.hand.length : null;
@@ -9160,6 +9189,20 @@ function startController(code, pid) {
         if (k) logTo(code, `${me.name} paid for ${k} of ${n.n} (${n.src})`);
         render(); break;
       }
+      case "dig-untilbasic": { // Hermit Druid: reveal until a basic land; it goes to hand, the rest to the graveyard (no basics left = the whole library)
+        const r = reminders.find(x => x.id === b.dataset.id); if (!r || !dig?.on) break; r.ubDone = true;
+        const out = []; let basic = null;
+        while (dig.lib.length) { const n = dig.lib.shift(), c = deckCard(n) || lookupCard(n) || { n }; if (/\bBasic\b/.test(c.t || "") && /\bLand\b/.test(c.t || "")) { basic = n; break; } out.push(c); }
+        if (basic) dig.hand.push(basic); digSave();
+        if (out.length) mutate(p => out.forEach(c => toZone(p, { n: c.n, t: c.t || "", m: c.m || "", ...(c.o ? { o: c.o } : {}) }, "gy")));
+        logTo(code, `${me.name}'s ${r.src}: ${out.length} card${out.length === 1 ? "" : "s"} to the graveyard${basic ? `, ${basic} to hand` : " — no basic land, the whole library is gone"}`);
+        reminders = reminders.filter(x => x !== r); renderHand(); render(); break; }
+      case "exalted-go": { const r = reminders.find(x => x.id === b.dataset.id), x = r?.exalted; if (!x) break; reminders = reminders.filter(y => y !== r);
+        const tag = `ex${Date.now().toString(36)}`;
+        mutate(p => { p.eot ||= {}; if (x.kind === "bf") { if (p.bf?.[x.id]) p.eot[tag] = { src: `exalted ×${x.n}`, target: x.id, dp: x.n, dt: x.n, kws: [] }; }
+          else { const t = p.tokens?.[x.id]; if (t) { t.ep = [...(t.ep || []), tag]; p.eot[tag] = { epTag: true, src: `exalted ×${x.n}`, dp: x.n, dt: x.n, kws: [], ids: [], toks: [x.id] }; } } });
+        logTo(code, `⚙ Exalted: ${x.name} attacks alone, +${x.n}/+${x.n} until end of turn`); render(); break; }
+      case "self-drew": { const r = reminders.find(x => x.id === b.dataset.id); if (!r) break; r.selfDrew = true; broadcastDraw(Number(b.dataset.n) || 1, r.src); render(); break; }
       case "note-drew": { // another player's wheel (Windfall): record my draws so Psychosis/Scrawling Crawler and friends see them
         const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
         update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
@@ -9465,6 +9508,7 @@ function startController(code, pid) {
         const vig = kwsOf(tokenPerm(t), pid, k, true).some(x => x.k === "vigilance");
         const per = Number(String(tokPTfx(t, pid, k) || "0/0").split("/")[0]) || 0;
         logTo(code, `${me.name}: ${n} ${t.name} token${n === 1 ? "" : "s"} attack`);
+        if (n === 1) exaltedCheck({ kind: "tok", id: k, name: `${t.name} token` });
         act([{ type: "attacks", tok: t.name, t: tokenPerm(t).t, n, kws: kwsOf(tokenPerm(t), pid, k, true).map(x => x.k) }, ...youAttackEv()], p => { p.youAtk = combatKey(); const x = p.tokens?.[k]; if (x && !vig) x.tapped = Math.min(x.count, (x.tapped || 0) + n); if (!vig) markAttacked(p, "tok", k, n); });
         atkOpen = null;
         startAttack(n === 1 ? t.name : `${n} ${t.name}s`, { name: t.name, power: per * n, cmd: false, ownId: null, loses: false, times: n, stats: myAtkStats("tok", k) }, ringBearer(me)?.k === k && n === 1, t, kwsOf(tokenPerm(t), pid, k, true));
