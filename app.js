@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018h";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018h";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018h";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261018h";
+import { firebaseConfig } from "./config.js?v=20261018i";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018i";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018i";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261018i";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -362,6 +362,10 @@ function tokPTfx(t, ownerId, k) {
 // ----- Combat preview: who can block an attacker, and what happens if they do -----
 const kwHas = (kws, k) => (kws || []).includes(k);
 // A creature's combat stats: a card ("bf", id) or a token stack ("tok", key) of `owner`
+// Vigor on the creature's controller's board: damage to their other creatures is prevented (and becomes +1/+1 counters)
+const VIGOR_RE = /if damage would be dealt to another creature you control, prevent that damage\. put a \+1\/\+1 counter on that creature for each 1 damage prevented this way/i;
+let modLookup = null; // the app's card lookup, for module-level helpers
+function vigorOn(owner, kind, id) { return Object.entries(owner?.bf || {}).some(([vid, x]) => !(kind === "bf" && vid === id) && VIGOR_RE.test(x.o || modLookup?.(x.n)?.o || "")); }
 function combatStats(owner, kind, id) {
   if (!owner) return null;
   if (kind === "bf") {
@@ -373,14 +377,14 @@ function combatStats(owner, kind, id) {
       colors: colorsOf(e.m), type: e.t || "", o, ownerName: owner.name,
       cantBlock: !!e.suspect || /^(?:this creature|[^.\n]*?) can't block\.?$/im.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't block"),
       indestr: /^(.*,\s*)?indestructible\b/im.test(o) || !!e.c?.x_indestructible || kwsOf(e, owner.id, id).some(x => x.k === "indestructible"),
-      unblock: /^(?:this creature|[^.\n]*?) can't be blocked\.?$/im.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked") };
+      unblock: /^(?:this creature|[^.\n]*?) can't be blocked\.?$/im.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked"), vig: vigorOn(owner, kind, id) };
   }
   const t = owner.tokens?.[id];
   if (!t || !isCreatureToken(t.name)) return null;
   const [p, tg] = String(tokPTfx(t, owner.id, id) || "1/1").split("/").map(x => Number(x) || 0);
   const kws = kwsOf(tokenPerm(t), owner.id, id, true).map(x => x.k);
   return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block"), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked"), regen: !!t.sh,
-    colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: "", ownerName: owner.name };
+    colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: "", ownerName: owner.name, vig: vigorOn(owner, "tok", id) };
 }
 const COLOR_NAMES = { W: "white", U: "blue", B: "black", R: "red", G: "green" };
 const colorsOf = m => [...new Set((String(m || "").match(/[WUBRG]/g) || []))];
@@ -429,7 +433,7 @@ function canBlock(a, b, defender) {
 // What happens if b blocks a (first strike, double strike, deathtouch, indestructible, trample)
 function fightOut(a, b) {
   const fs = x => kwHas(x.kws, "first strike") || kwHas(x.kws, "double strike");
-  const kills = (src, tgt, dmg) => !tgt.indestr && !tgt.regen && dmg > 0 && (kwHas(src.kws, "deathtouch") || dmg >= tgt.t);
+  const kills = (src, tgt, dmg) => !tgt.indestr && !tgt.vig && !tgt.regen && dmg > 0 && (kwHas(src.kws, "deathtouch") || dmg >= tgt.t); // Vigor: the damage is prevented
   let aDies = false, bDies = false;
   if (fs(a) && !fs(b)) { bDies = kills(a, b, a.p); if (!bDies) aDies = kills(b, a, b.p); }
   else if (fs(b) && !fs(a)) { aDies = kills(b, a, b.p); if (!aDies) bDies = kills(a, b, a.p); }
@@ -455,7 +459,7 @@ function blockPreview(a, defender) {
   const able = rows.filter(b => !b.why);
   return { rows, able, killers: able.filter(b => b.out.aDies && !b.out.bDies), trades: able.filter(b => b.out.aDies && b.out.bDies), menace: kwHas(a.kws, "menace") || /can't be blocked except by (?:two|three) or more creatures/i.test(a.o || "") };
 }
-const outText = (b, mine) => !b.out ? `can't block (${b.why})` : b.out.aDies && b.out.bDies ? "⚖ trade: both die" : b.out.aDies ? (mine ? "❌ blocks and kills yours, survives" : "✅ blocks and kills it, survives") : b.out.bDies ? (mine ? "✅ yours kills it" : "❌ your blocker dies") : "🛡 nothing dies";
+const outText = (b, mine) => !b.out ? `can't block (${b.why})` : b.vig && !mine && !b.out.aDies ? "🛡 Vigor: it takes no damage, gets +1/+1 counters instead" : b.out.aDies && b.out.bDies ? "⚖ trade: both die" : b.out.aDies ? (mine ? "❌ blocks and kills yours, survives" : "✅ blocks and kills it, survives") : b.out.bDies ? (mine ? "✅ yours kills it" : "❌ your blocker dies") : "🛡 nothing dies";
 // Can `casterId` target this permanent? (shroud, hexproof, protection from everything / from the chosen player)
 // ----- The Ring tempts you: level abilities and the current Ring-bearer -----
 const RING_LEVELS = [
@@ -753,10 +757,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18h";
+const APP_VERSION = "2026.10.18i";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018h" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018i" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -1361,6 +1365,7 @@ function startController(code, pid) {
     || anyCache?.get(name)
     || Object.values(me?.bf || {}).find(e => e.n === name && e.o)
     || null;
+  modLookup = lookupCard;
   const undo = [], undoMeta = [], redo = [];
   let actSeq = 0, actLabel = "", pendLog = null, digAtAct = null;
   let orderTriggers = (() => { try { return localStorage.getItem("mtga_order") !== "0"; } catch { return true; } })();
@@ -3512,6 +3517,9 @@ function startController(code, pid) {
       const [oid, kind, id] = h.c.v.split("|");
       const out = crOutcome(h.c, h.n, false);
       if (!h.c.s.pw && h.n > 0) (r.repTot ||= {})[oid] = (r.repTot[oid] || 0) + h.n * h.count;
+      if (/^prevented/.test(out)) { const eff = { k: "countersOn", target: { kind, id }, n: h.n, key: "p1p1", label: "+1/+1" }; // Vigor
+        if (oid === pid) setTimeout(() => act([{ type: "effects", effs: [eff], times: 1, count: 1, src: "Vigor" }]), 0); else sendOrders({ [oid]: {} }, { how: "fx", effs: [eff], src: "Vigor" });
+        hurt.push(`${h.c.s.name} (Vigor: +${h.n} counters instead)`); return; }
       if (/^dies/.test(out)) { for (let i = 0; i < h.count; i++) (byOwner[oid] ||= { targets: [] }).targets.push({ kind, id }); dead.push(`${h.c.o.name}'s ${h.c.s.name}${h.count > 1 ? ` ×${h.count}` : ""}`); }
       else if (h.c.s.pw) sendOrders({ [oid]: {} }, { how: "ctrSub", id, key: "loyalty", n: h.n, src: r.src });
       else if (h.n > 0) { sendOrders({ [oid]: {} }, { how: "markDmg", kind, id, idx: -1, n: h.n, all: h.tok, src: r.src }); hurt.push(h.c.s.name); }
@@ -9994,9 +10002,17 @@ function startController(code, pid) {
         const result = bl.length === 1 ? `${dies.length ? `${bl[0].name} dies` : `${bl[0].name} survives`}; ${aName} ${aDies ? "dies" : "survives"}` : `${aName} ${aDies ? "dies" : "survives"}; ${n.from} splits its ${total} damage among the blockers`;
         logTo(code, `🛡 ${me.name} blocked ${n.from}'s ${aName} (${a.p}/${a.t}) with ${names}: ${result}${tramp ? ` · ${tramp} tramples over` : ""}`);
         blockTriggers(bl);
+        { // Vigor: prevented combat damage becomes +1/+1 counters, on my blockers and on an attacker its controller's Vigor protects
+          const fsOf = x => kwHas(x.kws, "first strike") || kwHas(x.kws, "double strike"), dtA = kwHas(a.kws, "deathtouch");
+          const vb = bl.filter(x => x.vig);
+          if (vb.length && bl.length === 1) { const x = vb[0], dead = aDies && fsOf(x) && !fsOf(a), dmg = dead || a.p <= 0 ? 0 : kwHas(a.kws, "trample") ? Math.min(total, dtA ? 1 : x.t) : total;
+            if (dmg > 0) { setTimeout(() => act([{ type: "effects", effs: [{ k: "countersOn", target: { kind: x.kind, id: x.id }, n: dmg, key: "p1p1", label: "+1/+1" }], times: 1, count: 1, src: "Vigor" }]), 0); logTo(code, `🛡 Vigor: ${x.name} takes no damage from ${aName}, ${dmg} +1/+1 counter${dmg === 1 ? "" : "s"} instead`); } }
+          else if (vb.length) reminders.push({ id: newId(), src: "Vigor", text: `${n.from} splits ${aName}'s damage among your blockers. Vigor prevents it: put a +1/+1 counter on ${vb.map(x => x.name).join(", ")} for each damage assigned to it.`, times: 1 });
+          if (a.vig && n.fromId) { const hit = bl.reduce((s2, x) => s2 + (x.p > 0 ? x.p * (kwHas(x.kws, "double strike") ? 2 : 1) : 0), 0), aid = Object.entries(room.players?.[n.fromId]?.bf || {}).find(([, e]) => e.n === n.cardN)?.[0];
+            if (hit > 0 && aid) { sendOrders({ [n.fromId]: {} }, { how: "fx", effs: [{ k: "countersOn", target: { kind: "bf", id: aid }, n: hit, key: "p1p1", label: "+1/+1" }], src: "Vigor" }); logTo(code, `🛡 ${n.from}'s Vigor: ${aName} takes no damage from the blockers, ${hit} +1/+1 counter${hit === 1 ? "" : "s"} instead`); } } }
         mutate(p => { const k = tableCombat; if (p.blk?.k !== k) p.blk = { k, u: {} }; p.blk.u ||= {}; bl.forEach(x => { const key = `${x.kind}:${x.id}`; p.blk.u[key] = (p.blk.u[key] || 0) + 1; }); });
         if (n.fromId) sendNote(n.fromId, { text: `${me.name} blocked your ${aName} with ${names}. ${bl.length === 1 ? (aDies ? `Your ${aName} should die` : `Your ${aName} survives`) + (dies.length ? ` and kills ${bl[0].name}` : "") : `${aDies ? `Your ${aName} should die. ` : ""}You split its ${total} damage among the blockers`}${tramp ? `; ${tramp} trample damage hits ${me.name}` : ""}.`, src: "Blocks" });
-        if (n.cardN && n.fromId) sendOrders({ [n.fromId]: {} }, { how: "blockedDmg", cardN: n.cardN, src: n.src, dmg: Math.max(0, total - tramp), victim: shortNames });
+        if (n.cardN && n.fromId) sendOrders({ [n.fromId]: {} }, { how: "blockedDmg", cardN: n.cardN, src: n.src, dmg: bl.every(x => x.vig) ? 0 : Math.max(0, total - tramp), victim: shortNames }); // Vigor-prevented damage isn't dealt (no lifelink)
         const autoDie = bl.length === 1 && dies.length ? dies[0] : null; // one blocker and it clearly dies: send it to the graveyard now (Undo if a trick changes that)
         sendNote(pid, { kind: "blkres", text: `${shortNames} blocked ${n.from}'s ${aName}: ${result}.`, note: bl.length > 1 ? `Tap ☠ for each blocker that dies once ${n.from} assigns the damage.` : autoDie ? `${autoDie.name} went to your graveyard. If a combat trick saved it, tap ↶ Undo.` : "",
           dies: bl.length > 1 ? bl.map(x => ({ kind: x.kind, id: x.id, name: x.name })) : [] });
