@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261018i";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261018i";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261018i";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261018i";
+import { firebaseConfig } from "./config.js?v=20261019a";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261019a";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261019a";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261019a";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,10 +757,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.18i";
+const APP_VERSION = "2026.10.19a";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261018i" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261019a" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -928,7 +928,7 @@ function startHost(code, watch = false) {
     }
     { const tbb = document.getElementById("tbBtn"); if (tbb) tbb.hidden = !room.turnBack; }
     turnInfo.textContent = tp ? `${tp.name}'s Turn${room.turnNo ? ` · Round ${room.round || 1}` : ""}${room.airLock ? ` · 🌀 exile casting locked (${room.airLock.name})` : ""}` : "";
-    logEl.innerHTML = Object.values(room.log || {}).sort((a, b) => b.t - a.t).slice(0, 6)
+    logEl.innerHTML = Object.values(room.log || {}).sort((a, b) => b.t - a.t).slice(0, 3)
       .map(l => `<div>${esc(l.text)}</div>`).join("");
   };
   let seatOpen = false;
@@ -1159,7 +1159,7 @@ function panel(p, ps, turn) {
       ${pcounters.map(c => `<span class="stat ${c.k} ${c.lethal && p[c.k] >= c.lethal ? "lethal" : ""}">${c.label} ${p[c.k]}</span>`).join("")}
       ${cmd.map(x => `<span class="stat cmd ${x.n >= 21 ? "lethal" : ""}" style="--oc:${esc(x.o.color)}">⚔ ${esc(x.name ? shortCmd(x.name) : x.o.name)} ${x.n}</span>`).join("")}
       ${p.prot ? `<span class="stat">🛡 ${esc(p.prot.src)}</span>` : ""}${p.ring?.n ? `<span class="stat ring" title="${esc(ringTitle(p))}">💍 tempted ×${p.ring.n}${ringBearer(p) ? ` · ${esc(ringBearer(p).name)}` : ""}</span>` : ""}${p.phased ? `<span class="stat">👻 ${Object.keys(p.phased.bf || {}).length + Object.values(p.phased.tokens || {}).reduce((a, t) => a + (t.count || 0), 0)} phased</span>` : ""}
-      ${Object.keys(p.gy || {}).length ? `<span class="stat">🪦 ${Object.keys(p.gy).length}</span>` : ""}${Object.keys(p.ex || {}).length ? `<span class="stat">🚫 ${Object.keys(p.ex).length}</span>` : ""}
+      ${Object.keys(p.gy || {}).length ? `<span class="stat" title="Graveyard">GY ${Object.keys(p.gy).length}</span>` : ""}${Object.keys(p.ex || {}).length ? `<span class="stat" title="Exile">Exile ${Object.keys(p.ex).length}</span>` : ""}
       ${taxes.map(([k, n]) => `<span class="stat">⭐ ${esc(k.split("-")[0].replace(/^\w/, m => m.toUpperCase()))} tax +${n * 2}</span>`).join("")}
     </div>
     <div class="p-effects">${effects.map(ef => `<span class="badge ${ef.dur === "turn" ? "turn" : ""}">${ef.icon} ${esc(ef.name)}${ef.dur === "turn" ? " · this turn" : ""}</span>`).join("")}${p.dg && DUNGEONS[p.dg.d] ? `<span class="badge">🏰 ${esc(DUNGEONS[p.dg.d].name)}: ${esc(DUNGEONS[p.dg.d].rooms[p.dg.r]?.n || "")}</span>` : ""}${p.dgDone ? `<span class="badge">🏆 Dungeons completed ×${p.dgDone}${p.dgList ? ` (${esc(p.dgList)})` : ""}</span>` : ""}</div>

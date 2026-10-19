@@ -520,7 +520,8 @@ textarea { resize: vertical; font-size: .9rem; }
 
 /* TV footer: recent log lines, then all the buttons in one compact row at the very bottom */
 .tv-foot { flex-direction: column; align-items: stretch; gap: .6vh; padding-right: 200px; }
-.tv-foot .log { order: 1; max-height: 6vh; flex: none; }
+.tv-foot .log { order: 1; max-height: none; flex: none; } /* three whole lines, never cut off by the buttons */
+.tv-foot .log div { overflow-wrap: anywhere; }
 .tv-actions { order: 2; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tv-actions .btn { min-height: 0; padding: 5px 14px; font-size: clamp(12px, .8vw, 15px); width: auto; }
 .tv-actions .watch-link { font-size: clamp(11px, .7vw, 14px); margin-left: 8px; }
@@ -588,8 +589,13 @@ textarea { resize: vertical; font-size: .9rem; }
    In a pile, tapped cards stay upright and are only dimmed (a sideways card would hide its name). */
 .tpile { display: flex; flex-direction: column; flex: none; }
 .tpile > .tslot + .tslot { margin-top: calc(var(--ch) * -0.7); }
-.tpile > .tslot.tapped { width: var(--cw); }
-.tpile > .tslot.tapped .tcard { transform: translate(-50%, -50%); }
+.tpile > .tslot.tapped:not(:last-child) { width: var(--cw); }
+.tpile > .tslot.tapped:not(:last-child) .tcard { transform: translate(-50%, -50%); }
+/* the pile's bottom card is fully visible, so it turns sideways like any tapped card; covered ones get a "tapped" tag on their strip */
+.tpile { align-items: center; }
+.tpile > .tslot.tapped:not(:last-child) .tcard::after { content: "↻"; position: absolute; top: 2%; right: 3%; z-index: 3; font-size: max(11px, calc(var(--ch) * .12)); line-height: 1.1; font-weight: 800; color: var(--accent, #d9a441); background: rgba(0, 0, 0, .85); border-radius: 4px; padding: 0 3px; }
+.tpile > .tslot.tapped:not(:last-child) .tcard .tc-name { padding-right: 22% !important; }
+.tpile > .tslot.tapped:not(:last-child) .tc-count { right: auto; left: 4%; }
 .tpile > .tslot:not(:last-child) .tcard { box-shadow: 0 -1px 0 rgba(255, 255, 255, .12), 0 3px 6px rgba(0, 0, 0, .7); }
 .tpile .tc-pt, .tpile .tc-count { top: 3%; bottom: auto; right: 4%; left: auto; }
 .tpile .tc-tags { top: 3%; bottom: auto; left: 4%; transform: none; }
@@ -619,7 +625,7 @@ body.wide .side-table > :not(.tpanel) { grid-column: 1 / -1; }
 .perm-chip.phased { opacity: .6; }
 /* 🌐 a player's always-on effects, on their own panel: one small line each */
 .p-fx { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px; font-size: clamp(10px, .78vw, 15px); line-height: 1.25; }
-.pfx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .82; border-left: 3px solid var(--pc); padding-left: 6px; }
+.pfx { white-space: normal; overflow-wrap: anywhere; opacity: .82; border-left: 3px solid var(--pc); padding-left: 6px; } /* the whole effect, wrapped (no "…") */
 .pfx b { color: var(--slate, #7a8fb5); font-weight: 700; }
 .pfx.off { opacity: .4; }
 .pfx.more { opacity: .55; font-style: italic; border-left-color: transparent; }
