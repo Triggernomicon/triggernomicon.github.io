@@ -706,10 +706,13 @@ function parseCond(cond, cardName) {
   if (/you create one or more tokens|one or more tokens (you control )?enter|one or more tokens enter the battlefield under your control/.test(c)) return { ev: "tokens", once: true };
   if (/(a|another) (nontoken )?creature token (you control )?(enters|is created)/.test(c)) return { ev: "tokens", creature: true };
   if (/you create a token|a token (you control )?enters/.test(c)) return { ev: "tokens" };
+  if (/^(?:this creature|[a-z ,'-]+?) dies or is put into exile from the battlefield$/.test(c) && (c.startsWith(short) || /^this /.test(c))) return { ev: "selfdies", leaves: true, askNote: "" }; // God-Eternals
   if (/^(equipped|enchanted) creature dies$/.test(c)) return null; // the app handles these (it knows what's attached)
   if (/(a|another) creature token (you control )?dies/.test(c)) return { ev: "dies", token: true };
   if (/^one or more other creatures die$/.test(c)) return { ev: "dies", nontoken: false, mine: false, opp: false, other: true, once: true };
   if (/^one or more (nontoken )?creatures you control die$/.test(c)) return { ev: "dies", nontoken: /nontoken/.test(c), mine: true, other: false, once: true };
+  if (/^one or more nontoken creatures die$/.test(c)) return { ev: "dies", nontoken: true, mine: false, opp: false, other: false, once: true }; // Ghoulish Procession
+  { const ta = c.match(/^(?:a|an|another) ([a-z]+) (you control )?dies$/); if (ta && !/^(creature|permanent|token|card|player|source)$/.test(ta[1])) return { ev: "dies", types: [singular(ta[1])], nontoken: false, mine: !!ta[2], opp: false, other: /^another/.test(c) }; } // Hungry Lynx ("a Rat dies"), Atla Palani ("an Egg you control dies")
   { const td = c.match(/^(a|another|one or more) (nontoken )?(?:other )?([a-z]+(?:,? (?:or|and\/or) [a-z]+)*) you control (?:dies|die)$/); if (td && !/\bcreatures?\b|\btokens?\b|\bpermanents?\b/.test(td[3]) && !c.startsWith(short)) return { ev: "dies", types: splitTypes(td[3]), nontoken: !!td[2], mine: true, opp: false, other: td[1] === "another" || /\bother\b/.test(c), once: td[1] === "one or more" }; }
   if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) };
   let m = c.match(/you sacrifice (one or more|a|an|another) ([\w -]+?)(?: you control)?$/);
@@ -733,6 +736,7 @@ function parseCond(cond, cardName) {
   if (/^you create or sacrifice a token$/.test(c)) return { ev: "tokOrSac" };
   if (/^a creature is put into your graveyard from the battlefield$/.test(c)) return { ev: "dies", nontoken: true, mine: true, opp: false, other: false };
   if (/^you draw a card$/.test(c) || /^you draw a card except the first one you draw in each of your draw steps$/.test(c)) return { ev: "youdraw", exceptFirst: /except the first/.test(c) };
+  { const y3 = c.match(/^you draw your (second|third) card (?:in a|each) turn$/); if (y3) return { ev: "youdraw", nth: { second: 2, third: 3 }[y3[1]] }; } // Sneaky Snacker, Tamiyo
   { const yn = c.match(/^you draw your (first|second|third) card each turn$/); if (yn) return { ev: "youdraw", nth: { first: 1, second: 2, third: 3 }[yn[1]] }; }
   if (/^you play a land or cast a spell$/.test(c)) return { ev: "playOrCast" };
   m = c.match(/(an opponent|a player|another player|enchanted opponent) draws (a card|one or more cards|cards?|their (?:first|second) card each turn)/);
@@ -814,11 +818,14 @@ export function parseAbilities(card) {
     let cond, cond2 = null, text;
     const lnC = line.replace(/^at the beginning of combat on your turn,/i, "At the beginning of your combat,").replace(/^at the beginning of combat on each opponent's turn,/i, "At the beginning of each opponent's combat,").replace(/^at the beginning of each combat,/i, "At the beginning of each combat,");
     const lnP = lnC.replace(/^(?:survival — )?at the beginning of (?:each of )?your (?:postcombat|second) main phases?,/i, "At the beginning of your postcombat main phase,"); // Kona: "Survival — … second main phase"
-    const ph = lnP.match(/^at the beginning of (your|each|each player's|each opponent's) (upkeep|draw step|first main phase|precombat main phase|postcombat main phase|main phase|combat|end step|next end step)[^,]*, (.*)$/i);
+    // Auras and curses: "the upkeep of enchanted creature's controller", "enchanted player's upkeep", "the chosen player's upkeep" → every upkeep, with whose it really is
+    const whoUp = /^at the beginning of the upkeep of enchanted creature's controller, that player loses \d+ life|^at the beginning of the chosen player's upkeep, [^,]+? deals x damage to that player/i.test(lnP) ? null : lnP.match(/^at the beginning of (?:the upkeep of (enchanted creature's controller|the exiled card's owner)|(enchanted player's|the chosen player's|that player's) (?:first )?upkeep(?: each turn)?|each of that player's upkeeps|the end step|each upkeep)[^,]*,/i);
+    const lnQ = whoUp ? lnP.replace(whoUp[0], /end step/i.test(whoUp[0]) ? "At the beginning of each end step," : "At the beginning of each upkeep,") : lnP;
+    const ph = lnQ.match(/^at the beginning of (your|each|each player's|each opponent's) (upkeep|draw step|first main phase|precombat main phase|postcombat main phase|main phase|combat|end step|next end step)[^,]*, (.*)$/i);
     if (ph) {
       const phase = /postcombat/i.test(ph[2]) ? "main2" : /combat/i.test(ph[2]) ? "combat" : /upkeep/i.test(ph[2]) ? "upkeep" : /draw/i.test(ph[2]) ? "draw" : /main/i.test(ph[2]) ? "main1" : "end";
       const whose = /opponent/i.test(ph[1]) ? "opp" : /^your$/i.test(ph[1]) ? "your" : "each";
-      cond = { ev: "phase", phase, whose };
+      cond = { ev: "phase", phase, whose, ...(whoUp && !/end step|each upkeep/i.test(whoUp[0]) ? { check: true, askNote: `Only on ${(whoUp[1] || whoUp[2] || "that player's").replace(/'s$/, "")}'s upkeep.` } : {}) };
       text = ph[3];
       // Tippy-Toe: "At the beginning of your end step, if you gained life this turn, draw a card."
       if (/^if you gained life this turn, /i.test(text)) { cond = { ...cond, ifGained: true }; text = text.replace(/^if you gained life this turn, /i, ""); }
@@ -1132,7 +1139,7 @@ function matches(cond, ev, srcId) {
       const mine = ev.id ? (curP.bf?.[ev.id] && isT(curP.bf[ev.id]) ? 1 : 0) : ev.tok && isT(null, ev.tok) ? ev.n || 1 : 0;
       return mine && now >= cond.min && now - mine < cond.min ? 1 : 0;
     }
-    case "selfdies": return ev.type === "dies" && ev.ids?.includes(srcId) ? 1 : 0;
+    case "selfdies": return (ev.type === "dies" || (cond.leaves && ev.type === "leaves")) && ev.ids?.includes(srcId) ? 1 : 0;
     case "attack": {
       if (ev.type !== "attacks" || (cond.other && ev.id === srcId)) return 0;
       if (cond.kw && !(ev.kws || []).includes(cond.kw)) return 0;

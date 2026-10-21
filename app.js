@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261019a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261019a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261019a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261019a";
+import { firebaseConfig } from "./config.js?v=20261021a";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261021a";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261021a";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261021a";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,10 +757,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.19a";
+const APP_VERSION = "2026.10.21a";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261019a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261021a" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3147,6 +3147,34 @@ function startController(code, pid) {
     const bf = Object.entries(me.bf || {}).filter(([, e]) => /\bCreature\b/.test(e.t || lookupCard(e.n)?.t || "")).map(([id, e]) => Number(String(ptOf(e, countsFor(me), pid, id) || "0").split("/")[0]) || 0);
     const tk = Object.values(me.tokens || {}).filter(t => t.count > 0 && isCreatureToken(t.name)).map(t => Number(String(tokenPT(t, tablePT) || "0").split("/")[0]) || 0);
     return Math.max(0, ...bf, ...tk);
+  }
+  // "Whenever a source an opponent controls deals damage to you" (Retaliator Griffin, Michiko Konda, Dissipation Field),
+  // "a creature deals combat damage to you" (The Cabbage Merchant, Witch-king), "a Human deals damage to you" (Mikaeus)
+  // "Whenever you tap this land / a nonland permanent / a creature / an artifact token for mana, …" and "whenever enchanted land is tapped for mana"
+  // (Forbidden Orchard, Kinnan, Badgermole Cub, Roxanne, Regal Behemoth, Fertile Ground). "Add an additional {X}" ones are handled with the mana itself.
+  function tapManaTriggers(w) {
+    const isA = (phrase) => { const p = phrase.toLowerCase(); if (p === "nonland permanent") return !/\bLand\b/.test(w.t); if (p === "permanent") return true; if (p === "artifact token") return w.tok && /\bArtifact\b/.test(w.t);
+      if (p === "token") return w.tok; return p.split(/\s+/).every(q => new RegExp(`\\b${q.replace(/s$/, "")}`, "i").test(w.t)); };
+    Object.entries(me.bf || {}).forEach(([sid, x]) => String(x.o || lookupCard(x.n)?.o || "").split("\n").forEach(l => {
+      const t = l.trim(); let fx = null;
+      let m = t.match(/^whenever you tap this (?:land|creature|artifact|permanent) for mana, (.+)$/i); if (m && !w.tok && sid === w.id) fx = m[1];
+      m = t.match(/^whenever enchanted land is tapped for mana, (.+)$/i); if (m && !w.tok && x.att === w.id && !/adds? an additional/i.test(m[1])) fx = m[1];
+      m = t.match(/^whenever you tap an? ([a-z ]+?) for mana(, while you're the monarch| while you're the monarch)?, (.+)$/i);
+      if (m && !/^add an additional \{[WUBRGC]\}/i.test(m[3]) && isA(m[1]) && (!m[2] || !!me.effects?.monarch)) fx = m[3];
+      if (fx) reminders.push(normalizeRem({ id: newId(), src: dispName(x), srcId: sid, text: fx.replace(/^\w/, c => c.toUpperCase()), times: 1, note: `You tapped ${w.name || dispName(w.e)} for mana.` }));
+    }));
+  }
+  function damagedMe(d) {
+    const who = `${d.from}'s ${d.src}`;
+    Object.entries(me.bf || {}).forEach(([sid, x]) => String(x.o || lookupCard(x.n)?.o || "").split("\n").forEach(l => {
+      const t = l.trim().replace(/^[^—\n]{1,40} — /, "");
+      let m = t.match(/^whenever (?:a|one or more) (?:sources?|permanents?)(?: an opponent controls| your opponents control)? deals? (combat )?damage to you, (.+)$/i)
+        || t.match(/^whenever (?:a|one or more) creatures?(?: an opponent controls| your opponents control)? deals? (combat )?damage to you, (.+)$/i);
+      if (!m) { const ty = t.match(/^whenever an? ([A-Z][a-z]+) deals (combat )?damage to you, (.+)$/); if (ty && new RegExp(`\\b${ty[1]}\\b`).test(d.type)) m = [ty[0], ty[2], ty[3]]; }
+      if (!m || (m[1] && !d.combat)) return;
+      const text = m[2].replace(/\bthat many\b/gi, String(d.dmg)).replace(/\b(that source|that creature|that permanent)\b/gi, who).replace(/\breturn it\b/i, `return ${who}`).replace(/\bdestroy it\b/i, `destroy ${who}`).replace(/^\w/, c => c.toUpperCase());
+      reminders.push(normalizeRem({ id: newId(), src: dispName(x), srcId: sid, text, times: 1, note: `${who} dealt you ${d.dmg} damage.` }));
+    }));
   }
   function exaltedCheck(who) {
     if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted); return; } // a second attacker: not alone
@@ -5573,7 +5601,8 @@ function startController(code, pid) {
       && !confirm(`${dispName(e)} goes back to your hand when it hits the graveyard from the battlefield.\n\nOK = that happened (it returns to hand).\nCancel = I'm just fixing a mistake (leave it in the graveyard).`);
     const dies = (dest === "Graveyard" || dest === "Sacrificed") && creature;
     const events = [...(dest === "Sacrificed" ? [{ type: "sac", name: e.n, n: 1, token: false, creature, artifact: /\bArtifact\b/.test(e.t || "") }] : []),
-      ...(dies ? [{ type: "dies", n: 1, token: false, ids: [id] }] : [])];
+      ...(dies ? [{ type: "dies", n: 1, token: false, ids: [id] }] : []),
+      ...(!dies && dest !== "Battlefield" ? [{ type: "leaves", ids: [id], dest }] : [])]; // "when this leaves the battlefield" (Fiend Hunter, Lich's Mastery): exile, hand, or a noncreature to the graveyard
     act(events, null, p => { // it leaves after triggers check, so its own "when this dies" still fires
       delete p.bf[id];
       const parts = e.mutCards?.length > 1 ? e.mutCards.map(c => Object.fromEntries(Object.entries(c).filter(([, v]) => v != null && v !== ""))) : null;
@@ -7375,6 +7404,12 @@ function startController(code, pid) {
     }
     if (!me) return;
     const d = Number(b.dataset.d);
+    // Loki, God of Mischief: "Whenever a player or permanent becomes the target of an ability you control, draw a card" (once each turn)
+    if (["ping-go", "cd-go", "cp-go", "rm-go", "pp-go", "draw-to", "tlx-go", "ol-go", "tgain-go", "mill-to", "edict-target", "rem-target", "gh-go", "dd-go"].includes(a)) {
+      const r = reminders.find(x => x.id === b.dataset.id), tn = room?.turnNo || 0;
+      if (r?.srcId && me.bf?.[r.srcId]) Object.entries(me.bf || {}).forEach(([lid, x]) => { if (x.lokiT === tn || !/^whenever a player or permanent becomes the target of an ability you control, draw a card\. this ability triggers only once each turn\.?$/im.test(x.o || lookupCard(x.n)?.o || "")) return;
+        mutate(p => { if (p.bf?.[lid]) p.bf[lid].lokiT = tn; }, true); setTimeout(() => { reminders.push({ id: newId(), src: dispName(x), srcId: lid, text: "Draw a card.", times: 1, drawN: 1, note: `${r.src} targeted something (once each turn).` }); render(); }, 0); });
+    }
     switch (a) {
       case "life": lifeChange(d); break;
       case "pc": pcChange(b.dataset.k, d); break;
@@ -9620,7 +9655,7 @@ function startController(code, pid) {
         if (hasteR) { const hs = dispName(e); setTimeout(() => mutate(p => { p.poolHaste = (p.poolHaste || 0) + 1; p.poolHasteSrc = hs; }, true), 0); }
         const eo2 = e.o || lookupCard(e.n)?.o || "";
         const ci = /any color among legendary creatures and planeswalkers you control/i.test(eo2) ? [...new Set(Object.values(me.bf || {}).filter(x => /\bLegendary\b/.test(x.t || "") && /\b(Creature|Planeswalker)\b/.test(x.t || "")).flatMap(x => colorsOf(x.m)))] : /any color in your commander's color identity/i.test(eo2) ? cmdColors() : /any color that a land an opponent controls could produce/i.test(eo2) ? oppLandColors() : null;
-        if (sym === "any") { reminders.push({ id: newId(), src: dispName(e), text: ci ? (ci.length ? `Add one mana: ${ci.map(c => `{${c}}`).join(" / ")}.` : "No color available (it adds nothing).") : "Add one mana of any color.", times: 1, anyColor: true, ...(manaMult() > 1 ? { anyN: manaMult(), anyOne: true } : {}), ...(ci ? { colors: ci } : {}) }); toggleTap(b.dataset.id); break; }
+        if (sym === "any") { reminders.push({ id: newId(), src: dispName(e), text: ci ? (ci.length ? `Add one mana: ${ci.map(c => `{${c}}`).join(" / ")}.` : "No color available (it adds nothing).") : "Add one mana of any color.", times: 1, anyColor: true, ...(manaMult() > 1 ? { anyN: manaMult(), anyOne: true } : {}), ...(ci ? { colors: ci } : {}) }); toggleTap(b.dataset.id); tapManaTriggers({ id: b.dataset.id, e, t: e.t || lookupCard(e.n)?.t || "", tok: false }); render(); break; }
         toggleTap(b.dataset.id);
         const mult = manaMult();
         if (/\bCreature\b/.test(e.t || "")) { const bc = Object.values(me.bf || {}).filter(x => /whenever you tap a creature for mana, add an additional \{G\}/i.test(x.o || lookupCard(x.n)?.o || "")).length; if (bc) setTimeout(() => { poolAdd("{G}".repeat(bc), "Badgermole Cub"); render(); }, 0); }
@@ -9636,6 +9671,7 @@ function startController(code, pid) {
         const pain = Number((sym.match(/!(\d+)$/) || [])[1]) || 0; sym = sym.replace(/!\d+$/, "");
         if (pain) { if (!me.prot?.life) mutate(p => { p.life = (p.life ?? START_LIFE) - pain; }); logTo(code, `💥 ${dispName(e)} dealt ${pain} damage to ${me.name} (mana)`); }
         poolAdd(sym.repeat(mult) + extra, dispName(e) + (mult > 1 ? " ×2" : "") + (extra ? " + extra" : ""));
+        tapManaTriggers({ id: b.dataset.id, e, t: e.t || lookupCard(e.n)?.t || "", tok: false });
         render(); break;
       }
       case "tok-mana": {
@@ -9644,6 +9680,7 @@ function startController(code, pid) {
         mutate(p => { const x = p.tokens?.[k]; if (x) x.tapped = Math.min(x.count, (x.tapped || 0) + 1); });
         if (b.dataset.s === "any") reminders.push({ id: newId(), src: `${t.name} token`, text: "Add one mana of any color.", times: 1, anyColor: true, anyN: 1 });
         else poolAdd(b.dataset.s, `${t.name} token`);
+        tapManaTriggers({ id: k, t: tokenPerm(t).t || "", tok: true, name: `${t.name} token` });
         render(); break;
       }
       case "any-color": {
@@ -9912,6 +9949,7 @@ function startController(code, pid) {
         if (n.cardN && n.fromId) sendOrders({ [n.fromId]: {} }, { how: "combatHit", cardN: n.cardN, src: n.src, victim: me.name, times: n.times || 1, dmg: Math.round(dmg / Math.max(1, n.times || 1)) });
         if (n.ring >= 4) ringDrain(n);
         mutate(p => { p.life = (p.life ?? START_LIFE) - dmg - (n.ring >= 4 ? 3 : 0); if (n.cmdKey) { p.cmd ||= {}; p.cmd[n.cmdKey] = cur + dmg; } });
+        damagedMe({ dmg, combat: !n.noncombat, from: n.from, src: n.src, type: n.stats?.type || "" });
         logTo(code, `⚔ ${me.name} took ${dmg} from ${n.from}'s ${n.src}${noPrev && me.prot?.all ? ` (${noPrev}: can't be prevented)` : ""}${n.cmdKey ? ` (commander damage ${cur + dmg}${cur + dmg >= 21 ? " — lethal!" : ""})` : ""}`);
         if (n.loses) markLost(`combat damage from ${n.from}'s ${n.src}`);
         break;
