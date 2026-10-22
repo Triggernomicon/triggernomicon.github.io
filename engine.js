@@ -2545,7 +2545,7 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (sqAdd) {
       // + Pitiless Plunderer: {B}, sacrifice a Squirrel → a Treasure (and a Squirrel), the Treasure pays the next {B}
       const sqOut = pick(/^\{B\}, sacrifice x squirrels: /im)[0], tre = pick(/whenever another creature you control dies, create a treasure token/i).find(x => x.id !== sqAdd.id);
-      if (sqOut && tre && squirrels >= 1) out.push({ key: `sqtre:${sqOut.n}+${tre.n}`, name: sqOut.n === sqAdd.n ? `${sqAdd.n} + ${tre.n}` : `${sqAdd.n} + ${sqOut.n} + ${tre.n}`, pieces: [...new Set([sqAdd.n, sqOut.n, tre.n])], win: false, kind: "info",
+      if (sqOut && tre && squirrels >= 1) out.push({ key: `sqtre:${sqOut.n}+${tre.n}`, name: sqOut.n === sqAdd.n ? `${sqAdd.n} + ${tre.n}` : `${sqAdd.n} + ${sqOut.n} + ${tre.n}`, pieces: [...new Set([sqAdd.n, sqOut.n, tre.n])], win: false, kind: "tokens", spend: "Treasure", pump: sqOut.n,
         desc: `Pay {B} and sacrifice a Squirrel to ${sqOut.n}: ${tre.n} makes a Treasure, and ${sqAdd.n} adds a Squirrel with it. The Treasure pays the next {B}. Repeat: infinite death triggers, Treasure and Squirrels in and out, and each activation gives a target creature +1/-1 (shrink every opposing creature to 0 toughness).` });
       // + Warren Soultrader: pay 1 life, sacrifice a creature → a Treasure (and a Squirrel). Needs life back or extra tokens to be infinite
       const soul = pick(/^pay 1 life, sacrifice another creature: create a (?:treasure|food|clue) token/im)[0];
@@ -2555,7 +2555,7 @@ export function detectCombos(p, lookup, ctx = {}) {
         if (drainer) { const all = /each opponent loses/i.test(drainer.o.match(/whenever (?:another|a) creature[^.]*dies,[^.]*/i)?.[0] || "");
           out.push({ key: `soul:${soul.n}+${drainer.n}`, name: `${soul.n} + ${sqAdd.n} + ${drainer.n}`, pieces: [soul.n, sqAdd.n, drainer.n], win: true, kind: all ? "drainAll" : "drainOne",
             desc: `Pay 1 life and sacrifice a Squirrel to ${soul.n}. ${drainer.n} gives the life back and drains ${all ? "each opponent" : "an opponent"} for 1; the Treasure comes with a fresh Squirrel. Repeat: infinite drain, death triggers and Treasure.` }); }
-        else if (extra) out.push({ key: `soul:${soul.n}+${extra.n}`, name: `${sqAdd.n} + ${soul.n} + ${extra.n}`, pieces: [sqAdd.n, soul.n, extra.n], win: false, kind: "info",
+        else if (extra) out.push({ key: `soul:${soul.n}+${extra.n}`, name: `${sqAdd.n} + ${soul.n} + ${extra.n}`, pieces: [sqAdd.n, soul.n, extra.n], win: false, kind: "loop", run: { sac: true, create: { name: "Treasure", desc: "Treasure artifact" }, life: -1, note: "Crack Foods ({2}: gain 3 life) to stay ahead." },
           desc: `Pay 1 life and sacrifice a creature to ${soul.n}: ${extra.n} adds ${/one of each/i.test(extra.o) ? "a Food and a Clue" : "a Food"} and ${sqAdd.n} adds a Squirrel for every token. Two loops give two Treasures to crack a Food for 3 life, so you come out ahead: infinite Squirrels, Treasure, Food${/one of each/i.test(extra.o) ? ", Clues (cards)" : ""}, death triggers and life, and ${sqAdd.n} can shrink every opposing creature.` });
       }
     }
@@ -2564,7 +2564,7 @@ export function detectCombos(p, lookup, ctx = {}) {
   { const hz = pick(/foods you control have all activated abilities of all creature cards exiled with this creature/i)[0];
     const dd = hz && Object.values(p.ex || {}).find(c => { const o = String(lookup(c.n)?.o || c.o || ""); return /^\{T\}: Add \{[WUBRGC]\}/m.test(o) && /^put a -1\/-1 counter on this creature: untap this creature/im.test(o); });
     if (hz && dd) { const food = Object.values(p.tokens || {}).some(t => /^food$/i.test(t.name) && t.count > 0);
-      out.push({ key: `hazel:${hz.n}+${dd.n}`, name: `${hz.n} + ${dd.n}`, pieces: [hz.n, dd.n], win: false, kind: "info",
+      out.push({ key: `hazel:${hz.n}+${dd.n}`, name: `${hz.n} + ${dd.n}`, pieces: [hz.n, dd.n], win: false, kind: food ? "mana" : "info", sym: (String(lookup(dd.n)?.o || dd.o || "").match(/^\{T\}: Add (\{[WUBRGC]\})/m) || [])[1] || "{C}",
         desc: `${food ? "" : "Needs a Food. "}If ${dd.n} was exiled with ${hz.n}, your Foods can tap for mana and untap by taking a -1/-1 counter, which does nothing to a Food: infinite mana.` }); } }
   // Saw in Half on an Eternal Witness: the two copies return Saw in Half and the mana (Lion's Eye Diamond, Cabal Ritual with threshold)
   { const sawIn = n => handOrCast(n) || ents.some(x => x.n === n);
@@ -2572,7 +2572,7 @@ export function detectCombos(p, lookup, ctx = {}) {
     const wit = ents.find(x => /\bCreature\b/.test(x.t) && /^when (?:this creature|[^,]+) enters, (?:you may )?return (?:target|up to two target) cards? from your graveyard to your hand/im.test(x.o));
     const gyN = Object.keys(p.gy || {}).length;
     const fuel = has("Lion's Eye Diamond") ? "Lion's Eye Diamond" : sawIn("Cabal Ritual") && gyN >= 7 ? "Cabal Ritual" : null;
-    if (saw && wit && fuel) out.push({ key: `saw:${saw}+${wit.n}+${fuel}`, name: `${saw} + ${wit.n} + ${fuel}`, pieces: [saw, wit.n, fuel], win: false, kind: "info",
+    if (saw && wit && fuel) out.push({ key: `saw:${saw}+${wit.n}+${fuel}`, name: `${saw} + ${wit.n} + ${fuel}`, pieces: [saw, wit.n, fuel], win: false, kind: "loop", run: { dies: true, create: { name: wit.n, desc: `copy of ${wit.n} (half power and toughness, rounded up)` }, casts: fuel === "Cabal Ritual" ? 2 : 1, note: `Each loop: one ${wit.n} dies and two copies enter (net +1).` },
       desc: fuel === "Cabal Ritual" ? `Cabal Ritual (threshold) makes {B}{B}{B}{B}{B}; ${saw} destroys ${wit.n} for two copies, which return ${saw} and Cabal Ritual. Repeat: infinite ${wit.n} tokens, death and enter triggers, storm and magecraft.`
         : `Cast ${saw} on ${wit.n}; holding priority, crack Lion's Eye Diamond for three mana. The two copies return ${saw} and the Diamond; recast the Diamond for {0}. Repeat: infinite ${wit.n} tokens, death and enter triggers, storm and magecraft.` }); }
   // Chain of Smog + a magecraft drain (Witherbloom Apprentice): target yourself and copy it forever
@@ -2590,14 +2590,16 @@ export function detectCombos(p, lookup, ctx = {}) {
   { const oakRe = /whenever one or more \+1\/\+1 counters are put on this creature, you may create a [^.]*creature token/i;
     const oak = pick(oakRe)[0] || (() => { const n = [...(ctx.hand || []), ...(ctx.cast || [])].find(n => /\bCreature\b/.test(lookup(n)?.t || "") && oakRe.test(lookup(n)?.o || "")); return n ? { n } : null; })();
     const cru = pick(/^whenever a(?:nother)? creature (?:you control )?enters(?: the battlefield)?(?: under your control)?, put a \+1\/\+1 counter on each creature you control/im)[0];
-    if (oak && cru) out.push({ key: `oak:${oak.n}+${cru.n}`, name: `${oak.n} + ${cru.n}`, pieces: [oak.n, cru.n], win: false, kind: "info",
+    if (oak && cru && ents.some(x => x.n === oak.n)) out.push({ key: `oak:${oak.n}+${cru.n}`, name: `${oak.n} + ${cru.n}`, pieces: [oak.n, cru.n], win: false, kind: "loop", run: { create: { name: "Squirrel", desc: (oak.o.match(/create an? ([^.]*?) creature token/i) || [, "1/1 green Squirrel"])[1] + " creature" }, dropRem: oak.n, note: "Check the new tokens' counters: in the real loop each one only gets counters from the tokens made after it." },
+      desc: `Any creature entering starts it: ${cru.n} puts a counter on ${oak.n}, which makes a token; that token entering puts more counters on everything. Stop whenever you like: as many tokens and +1/+1 counters as you want.` });
+    else if (oak && cru) out.push({ key: `oak:${oak.n}+${cru.n}`, name: `${oak.n} + ${cru.n}`, pieces: [oak.n, cru.n], win: false, kind: "info",
       desc: `Any creature entering starts it: ${cru.n} puts a counter on ${oak.n}, which makes a token; that token entering puts more counters on everything. Stop whenever you like: as many tokens and +1/+1 counters as you want.` }); }
   // Kodama of the East Tree + a bounce land + a landfall token maker (Rampaging Baloths)
   { const ko = pick(/whenever another permanent you control enters, if it wasn't put onto the battlefield with this ability, you may put a permanent card with equal or lesser mana value from your hand onto the battlefield/i)[0];
     const bounceRe = /when this land enters, return a land you control to its owner's hand/i;
     const bounce = ko && (ents.find(x => bounceRe.test(x.o))?.n || (ctx.hand || []).find(n => bounceRe.test(lookup(n)?.o || "")));
     const lf = ko && pick(/landfall — whenever a land you control enters, create [^.]*creature token/i)[0];
-    if (ko && bounce && lf) out.push({ key: `kodama:${ko.n}+${bounce}+${lf.n}`, name: `${ko.n} + ${bounce} + ${lf.n}`, pieces: [ko.n, bounce, lf.n], win: false, kind: "info",
+    if (ko && bounce && lf) out.push({ key: `kodama:${ko.n}+${bounce}+${lf.n}`, name: `${ko.n} + ${bounce} + ${lf.n}`, pieces: [ko.n, bounce, lf.n], win: false, kind: "loop", run: { create: { name: (lf.o.match(/create an? [^.]*?\b([A-Z][a-z]+) creature token/) || [, "Beast"])[1], desc: (lf.o.match(/create an? ([^.]*?) creature token/i) || [, "4/4 green Beast"])[1] + " creature" }, landfall: true, dropRem: ko.n, note: `Each loop is one landfall (${bounce} entering) and one token.` },
       desc: `With a land drop left: play ${bounce}, return ${bounce} itself to your hand; ${lf.n} makes a token, and the token entering lets ${ko.n} put ${bounce} back from your hand. Repeat: infinite tokens and landfall triggers.` }); }
   // Glacial Chasm lock: replay it from the graveyard with an extra land drop (The Gitrog Monster + Mole Man, Icetill Explorer)
   { const chasmIn = ents.find(x => x.n === "Glacial Chasm") || Object.values(p.gy || {}).find(c => c.n === "Glacial Chasm") || (ctx.hand || []).includes("Glacial Chasm");
