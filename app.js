@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261021e";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261021e";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261021e";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261021e";
+import { firebaseConfig } from "./config.js?v=20261021f";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261021f";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261021f";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261021f";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,10 +757,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.21e";
+const APP_VERSION = "2026.10.21f";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261021e" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261021f" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -3053,7 +3053,7 @@ function startController(code, pid) {
     if (!opts.tokenCopy && /\{X\}/.test(card.m || "") && /when (?:this [a-z]+|[^.\n]*?) enters,[^.\n]*\bX\b/i.test(card.o || "") && !/enters with X\b/i.test(card.o || "")) {
       const v = prompt(`${dispName(card)}: what was X?`, "1"); etbX = Math.max(0, Math.floor(Number(v) || 0)); }
     act([{ type: "enters", id, card, cast: !!castKey, ...(opts.tokenCopy ? { tok: true } : {}), ...(land && !opts.via && !opts.fromZone ? { played: true } : {}) }], p => {
-      p.bf ||= {}; p.bf[id] = { ...(kickedNow ? { kicked: true } : {}), ...bfEntry(card), et: room?.turnNo || 0, ...(opts.warp ? { warp: room?.turnNo || 0 } : {}), ...(opts.dash ? { dash: true, haste: "dash" } : {}), ...(opts.own && opts.own.id !== pid ? { own: opts.own } : {}), ...(opts.tokenCopy ? { tok: true } : {}), ...(opts.haste ? { haste: opts.haste } : {}), ...(opts.sacNext ? { sacNext: opts.sacNext } : {}), ...(opts.blitz ? { blitz: true } : {}) };
+      p.bf ||= {}; p.bf[id] = { ...(kickedNow ? { kicked: true } : {}), ...bfEntry(card), et: room?.turnNo || 0, ...(land && !opts.via && !opts.fromZone ? { pl: 1 } : {}), ...(opts.warp ? { warp: room?.turnNo || 0 } : {}), ...(opts.dash ? { dash: true, haste: "dash" } : {}), ...(opts.own && opts.own.id !== pid ? { own: opts.own } : {}), ...(opts.tokenCopy ? { tok: true } : {}), ...(opts.haste ? { haste: opts.haste } : {}), ...(opts.sacNext ? { sacNext: opts.sacNext } : {}), ...(opts.blitz ? { blitz: true } : {}) };
       if (tapped === true) p.bf[id].tap = true;
       enterCounters(p, id, card);
       if (/\bSaga\b/.test(card.t || "")) { p.bf[id].c ||= {}; p.bf[id].c.lore = (p.bf[id].c.lore || 0) + 1; } // a Saga enters with its first lore counter
@@ -4212,7 +4212,7 @@ function startController(code, pid) {
     const card = lookupCard(o.cardN) || Object.values(me.bf || {}).find(e => e.n === o.cardN);
     const ll = Object.entries(me.bf || {}).find(([id, e]) => e.n === o.cardN && kwsOf({ ...e, o: e.o || lookupCard(e.n)?.o }, pid, id).some(x => x.k === "lifelink"));
     const llTok = !ll && Object.entries(me.tokens || {}).find(([k, t]) => o.cardN === t.name && kwsOf(tokenPerm(t), pid, k, true).some(x => x.k === "lifelink"));
-    if ((ll || llTok) && o.dmg > 0 && !me.prot?.life) { const ga = gainAdj(me, o.dmg * Math.max(1, o.times || 1), lookupCard); mutate(p => { p.life = (p.life ?? START_LIFE) + ga.n; }); logTo(code, `💚 ${me.name}'s ${o.src}: lifelink +${ga.n} life${ga.why}`); }
+    if ((ll || llTok) && o.dmg > 0 && !me.prot?.life) { const k = Math.max(1, o.times || 1); for (let i = 0; i < k; i++) setTimeout(() => { const ga = gainAdj(me, o.dmg, lookupCard); mutate(p => { p.life = (p.life ?? START_LIFE) + ga.n; }); logTo(code, `💚 ${me.name}'s ${o.src}${k > 1 ? ` (${i + 1} of ${k})` : ""}: lifelink +${ga.n} life${ga.why}`); }, i * 30); } // each lifelinker is its own life-gain event (Archangel of Thune, Ajani's Pridemate)
     const big = card ? bigHitTriggers({ ...card, o: card.o || lookupCard(card.n)?.o }).filter(h => (o.dmg || 0) >= h.min).map(h => h.text) : [];
     const hitT = String(card?.t || Object.values(me.tokens || {}).find(t => t.name === o.cardN) && `Token Creature — ${o.cardN}` || "");
     const anyMine = Object.values(me.bf || {}).flatMap(x => String(x.o || lookupCard(x.n)?.o || "").split("\n").map(l => l.trim().match(/^whenever an? (nontoken |historic |artifact |legendary )?([A-Z][a-z]+|creature) you control deals combat damage to a player(?: or battle)?, (.+)$/i)).filter(m => m && !(/nontoken/i.test(m[1] || "") && /\bToken\b/.test(hitT)) && (!/historic/i.test(m[1] || "") || /\b(Legendary|Artifact|Saga)\b/.test(hitT)) && (!/artifact/i.test(m[1] || "") || /\bArtifact\b/.test(hitT)) && (!/legendary/i.test(m[1] || "") || /\bLegendary\b/.test(hitT)) && (/^creature$/i.test(m[2]) || new RegExp(`\\b${m[2]}\\b`, "i").test(hitT))).map(m => ({ text: m[3].replace(/create that many /i, `create ${o.dmg || 1} `), src: dispName(x) })));
@@ -10512,8 +10512,9 @@ function startController(code, pid) {
       { const now = {}; seated(room).filter(o => o.id !== pid).forEach(o => { now[o.id] = Object.entries(o.bf || {}).filter(([, e]) => /\bLand\b/.test(e.t || "")).map(([id]) => id); });
         if (oppLandSeen) {
           const k = Object.entries(now).reduce((a, [oid, ids]) => a + ids.filter(x => !(oppLandSeen[oid] || []).includes(x)).length, 0);
-          const bg = k && Object.values(me.bf || {}).find(x => /whenever an opponent plays a land, you may put a land card from your hand onto the battlefield/i.test(x.o || lookupCard(x.n)?.o || ""));
-          if (bg) { reminders.push({ id: newId(), src: dispName(bg), text: `An opponent played a land: you may put a land card from your hand onto the battlefield${k > 1 ? ` (×${k})` : ""}.`, times: 1 }); setTimeout(render, 0); }
+          const kp = Object.entries(now).reduce((a, [oid, ids]) => a + ids.filter(x => !(oppLandSeen[oid] || []).includes(x) && room.players?.[oid]?.bf?.[x]?.pl).length, 0); // Burgeoning: only lands played, not put onto the battlefield
+          const bg = kp && Object.values(me.bf || {}).find(x => /whenever an opponent plays a land, you may put a land card from your hand onto the battlefield/i.test(x.o || lookupCard(x.n)?.o || ""));
+          if (bg) { reminders.push({ id: newId(), src: dispName(bg), text: `An opponent played a land: you may put a land card from your hand onto the battlefield${kp > 1 ? ` (×${kp})` : ""}.`, times: 1 }); setTimeout(render, 0); }
           const seenL = oppLandSeen;
           if (k) setTimeout(() => Object.entries(me.bf || {}).forEach(([sid, x]) => { if (!/^whenever a land an opponent controls enters, that player loses 1 life\. put a \+1\/\+1 counter on this creature/im.test(x.o || lookupCard(x.n)?.o || "")) return; const who = Object.entries(now).filter(([oid, ids]) => ids.some(i => !(seenL[oid] || []).includes(i))).map(([oid]) => room.players?.[oid]?.name).join(", "); setTimeout(() => mutate(p => { const y = p.bf?.[sid]; if (y) { y.c ||= {}; y.c.p1p1 = (y.c.p1p1 || 0) + k; } }), 0); logTo(code, `⚙ ${dispName(x)}: +${k} +1/+1`); reminders.push({ id: newId(), src: dispName(x), text: `${who} had a land enter: they lose 1 life${k > 1 ? ` (×${k})` : ""}.`, times: 1 }); render(); }), 0);
         }
