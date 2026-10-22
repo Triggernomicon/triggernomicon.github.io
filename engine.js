@@ -714,7 +714,7 @@ function parseCond(cond, cardName) {
   if (/^one or more nontoken creatures die$/.test(c)) return { ev: "dies", nontoken: true, mine: false, opp: false, other: false, once: true }; // Ghoulish Procession
   { const ta = c.match(/^(?:a|an|another) ([a-z]+) (you control )?dies$/); if (ta && !/^(creature|permanent|token|card|player|source)$/.test(ta[1])) return { ev: "dies", types: [singular(ta[1])], nontoken: false, mine: !!ta[2], opp: false, other: /^another/.test(c) }; } // Hungry Lynx ("a Rat dies"), Atla Palani ("an Egg you control dies")
   { const td = c.match(/^(a|another|one or more) (nontoken )?(?:other )?([a-z]+(?:,? (?:or|and\/or) [a-z]+)*) you control (?:dies|die)$/); if (td && !/\bcreatures?\b|\btokens?\b|\bpermanents?\b/.test(td[3]) && !c.startsWith(short)) return { ev: "dies", types: splitTypes(td[3]), nontoken: !!td[2], mine: true, opp: false, other: td[1] === "another" || /\bother\b/.test(c), once: td[1] === "one or more" }; }
-  if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) };
+  if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) && !/^this (?:creature|permanent) or another\b/.test(c) };
   let m = c.match(/you sacrifice (one or more|a|an|another) ([\w -]+?)(?: you control)?$/);
   if (m) return { ev: "sac", what: m[2], once: m[1] === "one or more" };
   m = c.match(/(?:a|an|another) ([\w-]+) you control is put into a graveyard/);
@@ -767,8 +767,20 @@ export const abilitiesOf = card => {
 
 // Parse a card's rules text once into triggers, replacement effects and P/T rules
 // Keywords whose reminder text is the real rule: spell them out so the normal parsers see them
+const KW_N = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const kwNum = n => KW_N[Number(n)] || n;
 export function kwExpand(o) {
-  return String(o || "").replace(/^Modular (\d+)[^\n]*/m, "This creature enters with $1 +1/+1 counters on it.\nWhen this creature dies, you may put its +1/+1 counters on target artifact creature.")
+  return String(o || "")
+    // keyword triggers whose rules live only in reminder text (which the parser skips): spell them out
+    .replace(/^Annihilator (\d+)[^\n]*/m, (_, n) => `Whenever this creature attacks, defending player sacrifices ${kwNum(n)} permanents of their choice.`)
+    .replace(/^Dethrone\b[^\n]*/m, "Whenever this creature attacks, if defending player has the most life or is tied for most life, put a +1/+1 counter on this creature.")
+    .replace(/^Fabricate (\d+)[^\n]*/m, (_, n) => `When this creature enters, choose one —\n• Put ${kwNum(n)} +1/+1 counter${n === "1" ? "" : "s"} on this creature.\n• Create ${kwNum(n)} 1/1 colorless Servo artifact creature token${n === "1" ? "" : "s"}.`)
+    .replace(/^Melee\b[^\n]*/m, "Whenever this creature attacks, it gets +1/+1 until end of turn for each opponent you attacked this combat.")
+    .replace(/^Renown (\d+)[^\n]*/m, (_, n) => `When this creature deals combat damage to a player, if it isn't renowned, put ${kwNum(n)} +1/+1 counter${n === "1" ? "" : "s"} on it and it becomes renowned.`)
+    .replace(/^Soulshift (\d+)[^\n]*/m, (_, n) => `When this creature dies, you may return target Spirit card with mana value ${n} or less from your graveyard to your hand.`)
+    .replace(/^Evoke[—-][^\n]*|^Evoke (?:\{[^}]+\})+[^\n]*/m, m => `${m}\nWhen this creature enters, if its evoke cost was paid, its controller sacrifices it.`)
+    .replace(/^Fading (\d+)[^\n]*/m, (_, n) => `This permanent enters with ${kwNum(n)} fade counters on it.\nAt the beginning of your upkeep, remove a fade counter from this permanent. If you can't, sacrifice it.`)
+    .replace(/^Ravenous\b[^\n]*/m, "This creature enters with X +1/+1 counters on it.\nWhen this creature enters, if X is 5 or more, draw a card.").replace(/^Modular (\d+)[^\n]*/m, "This creature enters with $1 +1/+1 counters on it.\nWhen this creature dies, you may put its +1/+1 counters on target artifact creature.")
     .replace(/^Training\b[^\n]*/m, "Whenever this creature attacks with another creature with greater power, put a +1/+1 counter on this creature.")
     .replace(/^Outlast ((?:\{[^}]+\})+)[^\n]*/m, "$1, {T}: Put a +1/+1 counter on this creature. Activate only as a sorcery.")
     .replace(/^Mentor\b[^\n]*/m, "Whenever this creature attacks, put a +1/+1 counter on target attacking creature with lesser power.")
@@ -829,6 +841,10 @@ export function parseAbilities(card) {
       text = ph[3];
       // Tippy-Toe: "At the beginning of your end step, if you gained life this turn, draw a card."
       if (/^if you gained life this turn, /i.test(text)) { cond = { ...cond, ifGained: true }; text = text.replace(/^if you gained life this turn, /i, ""); }
+      { const gn = text.match(/^if you(?:'ve)? gained (\d+|two|three|four|five|six|seven|eight|nine|ten) or more life this turn, /i); if (gn) { cond = { ...cond, ifGainedN: num(gn[1]) || Number(gn[1]) }; text = text.slice(gn[0].length).replace(/^\w/, c => c.toUpperCase()); } }
+      if (/^if a creature died this turn, /i.test(text)) { cond = { ...cond, ifDied: true }; text = text.replace(/^if a creature died this turn, /i, "").replace(/^\w/, c => c.toUpperCase()); }
+      if (/^if no creatures are on the battlefield, /i.test(text)) { cond = { ...cond, ifNoCreatures: true }; text = text.replace(/^if no creatures are on the battlefield, /i, "").replace(/^\w/, c => c.toUpperCase()); }
+      { const nn = text.match(/^if you control no ([A-Z][a-z]+)s, /); if (nn) { cond = { ...cond, ifNone: nn[1].toLowerCase() }; text = text.slice(nn[0].length).replace(/^\w/, c => c.toUpperCase()); } }
       if (/^if you have the city's blessing, /i.test(text)) { cond = { ...cond, ifBlessing: true }; text = text.replace(/^if you have the city's blessing, /i, ""); }
       const ol = text.match(/^if an opponent lost (\d+|one|two|three|four|five) or more life this turn, /i) || text.match(/^if an opponent lost life this turn, /i);
       if (ol) { cond = { ...cond, ifOppLost: ol[1] ? num(ol[1]) || Number(ol[1]) : 1 }; text = text.slice(ol[0].length); }
@@ -845,7 +861,7 @@ export function parseAbilities(card) {
     } else {
       // a comma inside the card's own name ("When Gonti, Lord of Luxury enters, …") would split the line in the wrong place
       const full = card.n.split("#")[0].split(" // ")[0];
-      const ln = full.includes(",") ? line.split(full).join(full.split(",")[0]) : line;
+      const ln = (full.includes(",") ? line.split(full).join(full.split(",")[0]) : line).replace(/^whenever another creature dies, or a creature card is put into a graveyard from anywhere other than the battlefield, or a creature card leaves your graveyard, /i, "Whenever another creature dies, "); // Syr Konrad: the other two cases are by hand
       m = ln.match(/^(?:whenever|when) ([^,]+), (.*)$/i);
       if (!m) continue;
       { const tp = ln.match(/^whenever an opponent attacks you with two or more creatures, draws their second card each turn, or casts their second spell each turn, (.+)$/i);
@@ -1656,6 +1672,10 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (t.effs?.some(f => f.n?.spellMv)) t = { ...t, effs: t.effs.map(f => f.n?.spellMv ? { ...f, n: manaValue(evx.card?.m || "") } : f) }; // Ovika: X = that spell's mana value
         if (t.onceTurn) { const k = `${s.id}:${ti}`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; }
         if (t.cond.ifGained && p.lifeGained !== ctx.turnNo) continue;
+        if (t.cond.ifGainedN && !(p.lifeGainedN?.t === ctx.turnNo && (p.lifeGainedN.n || 0) >= t.cond.ifGainedN)) continue; // Resplendent Angel, Valkyrie Harbinger: intervening "if"
+        if (t.cond.ifDied && env && env.anyDied === false) continue; // Séance Board, Needletooth Pack
+        if (t.cond.ifNoCreatures && env && env.anyCreature === true) continue; // Pestilence
+        if (t.cond.ifNone && countTypes(p, [t.cond.ifNone]) > 0) continue; // Ophiomancer: "if you control no Snakes"
         if (t.cond.ifBlessing && !p.effects?.blessing) continue;
         if (t.cond.ifAnyLost && !((env?.anyLost || 0) >= t.cond.ifAnyLost)) continue;
         if (t.cond.ifKicked && !p.bf?.[s.id]?.kicked) continue;
