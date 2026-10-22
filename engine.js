@@ -2527,6 +2527,49 @@ export function detectCombos(p, lookup, ctx = {}) {
     const zero = gs && [...ents.filter(x => x.id !== gs.id), ...Object.values(p.gy || {}).map(c => ({ n: c.n, t: c.t || lookup(c.n)?.t || "" }))].find(x => /\bArtifact\b/.test(x.t || lookup(x.n)?.t || "") && !/\bLand\b/.test(x.t || lookup(x.n)?.t || "") && x.n !== gs.n && manaValue(String(lookup(x.n)?.m ?? "")) === 0 && lookup(x.n)?.m != null);
     if (ub && gs && zero) out.push({ key: `named:Underworld Breach+${gs.n}+${zero.n}`, name: `Underworld Breach + ${gs.n} + ${zero.n}`, pieces: ["Underworld Breach", gs.n, zero.n], win: false, kind: "info",
       desc: `Tap ${gs.n} and sacrifice ${zero.n} (target player mills 3), escape ${zero.n} for free (exile 3 other graveyard cards); it enters and untaps ${gs.n}. Mill yourself to keep the graveyard stocked: infinite self-mill, storm, artifact enter and leave triggers. Breach is sacrificed at the end step.` }); }
+  // Chatterfang-style token adder ("those tokens plus that many 1/1 Squirrels"): sacrificing a creature that makes a token makes a Squirrel to sacrifice next
+  { const sqAdd = pick(/if one or more tokens would be created under your control, those tokens plus that many [^.]*squirrel creature tokens/i)[0];
+    const toks = Object.values(p.tokens || {}).filter(t => (t.count || 0) > 0);
+    const squirrels = toks.filter(t => /squirrel/i.test(t.name)).reduce((a, t) => a + t.count, 0) + ents.filter(x => /\bSquirrel\b/.test(x.t) && x.n !== sqAdd?.n).length;
+    const otherCreatures = toks.filter(t => /creature/i.test(t.desc || "") || /squirrel|soldier|zombie|spirit|goblin|elf|saproling|insect|rat|beast|human|cat|bird|wolf|bear|construct|thopter|servo|eldrazi/i.test(t.name)).reduce((a, t) => a + t.count, 0) + ents.filter(x => /\bCreature\b/.test(x.t)).length;
+    if (sqAdd) {
+      // + Pitiless Plunderer: {B}, sacrifice a Squirrel → a Treasure (and a Squirrel), the Treasure pays the next {B}
+      const sqOut = pick(/^\{B\}, sacrifice x squirrels: /im)[0], tre = pick(/whenever another creature you control dies, create a treasure token/i).find(x => x.id !== sqAdd.id);
+      if (sqOut && tre && squirrels >= 1) out.push({ key: `sqtre:${sqOut.n}+${tre.n}`, name: sqOut.n === sqAdd.n ? `${sqAdd.n} + ${tre.n}` : `${sqAdd.n} + ${sqOut.n} + ${tre.n}`, pieces: [...new Set([sqAdd.n, sqOut.n, tre.n])], win: false, kind: "info",
+        desc: `Pay {B} and sacrifice a Squirrel to ${sqOut.n}: ${tre.n} makes a Treasure, and ${sqAdd.n} adds a Squirrel with it. The Treasure pays the next {B}. Repeat: infinite death triggers, Treasure and Squirrels in and out, and each activation gives a target creature +1/-1 (shrink every opposing creature to 0 toughness).` });
+      // + Warren Soultrader: pay 1 life, sacrifice a creature → a Treasure (and a Squirrel). Needs life back or extra tokens to be infinite
+      const soul = pick(/^pay 1 life, sacrifice another creature: create a (?:treasure|food|clue) token/im)[0];
+      if (soul && otherCreatures - ents.filter(x => /\bCreature\b/.test(x.t) && [soul.id, sqAdd.id].includes(x.id)).length >= 2) {
+        const drainer = pick(/whenever (?:another|a) creature (?:you control )?dies, [^.]*(?:loses (?:1|one) life and you gain (?:1|one) life|you gain (?:1|one) life and [^.]*loses (?:1|one) life)/i).find(x => x.id !== soul.id);
+        const extra = pick(/if you would create a clue, food, or treasure token, instead create one of each|those tokens plus an additional food token are created instead/i)[0];
+        if (drainer) { const all = /each opponent loses/i.test(drainer.o.match(/whenever (?:another|a) creature[^.]*dies,[^.]*/i)?.[0] || "");
+          out.push({ key: `soul:${soul.n}+${drainer.n}`, name: `${soul.n} + ${sqAdd.n} + ${drainer.n}`, pieces: [soul.n, sqAdd.n, drainer.n], win: true, kind: all ? "drainAll" : "drainOne",
+            desc: `Pay 1 life and sacrifice a Squirrel to ${soul.n}. ${drainer.n} gives the life back and drains ${all ? "each opponent" : "an opponent"} for 1; the Treasure comes with a fresh Squirrel. Repeat: infinite drain, death triggers and Treasure.` }); }
+        else if (extra) out.push({ key: `soul:${soul.n}+${extra.n}`, name: `${sqAdd.n} + ${soul.n} + ${extra.n}`, pieces: [sqAdd.n, soul.n, extra.n], win: false, kind: "info",
+          desc: `Pay 1 life and sacrifice a creature to ${soul.n}: ${extra.n} adds ${/one of each/i.test(extra.o) ? "a Food and a Clue" : "a Food"} and ${sqAdd.n} adds a Squirrel for every token. Two loops give two Treasures to crack a Food for 3 life, so you come out ahead: infinite Squirrels, Treasure, Food${/one of each/i.test(extra.o) ? ", Clues (cards)" : ""}, death triggers and life, and ${sqAdd.n} can shrink every opposing creature.` });
+      }
+    }
+  }
+  // Hazel's Brewmaster: Foods gain the activated abilities of exiled creature cards. Devoted Druid's untap costs a Food nothing
+  { const hz = pick(/foods you control have all activated abilities of all creature cards exiled with this creature/i)[0];
+    const dd = hz && Object.values(p.ex || {}).find(c => { const o = String(lookup(c.n)?.o || c.o || ""); return /^\{T\}: Add \{[WUBRGC]\}/m.test(o) && /^put a -1\/-1 counter on this creature: untap this creature/im.test(o); });
+    if (hz && dd) { const food = Object.values(p.tokens || {}).some(t => /^food$/i.test(t.name) && t.count > 0);
+      out.push({ key: `hazel:${hz.n}+${dd.n}`, name: `${hz.n} + ${dd.n}`, pieces: [hz.n, dd.n], win: false, kind: "info",
+        desc: `${food ? "" : "Needs a Food. "}If ${dd.n} was exiled with ${hz.n}, your Foods can tap for mana and untap by taking a -1/-1 counter, which does nothing to a Food: infinite mana.` }); } }
+  // Saw in Half on an Eternal Witness: the two copies return Saw in Half and the mana (Lion's Eye Diamond, Cabal Ritual with threshold)
+  { const sawIn = n => handOrCast(n) || ents.some(x => x.n === n);
+    const saw = [...(ctx.hand || []), ...(ctx.cast || [])].find(n => /destroy target creature\. if that creature dies this way, its controller creates two tokens that are copies of that creature/i.test(lookup(n)?.o || ""));
+    const wit = ents.find(x => /\bCreature\b/.test(x.t) && /^when (?:this creature|[^,]+) enters, (?:you may )?return (?:target|up to two target) cards? from your graveyard to your hand/im.test(x.o));
+    const gyN = Object.keys(p.gy || {}).length;
+    const fuel = has("Lion's Eye Diamond") ? "Lion's Eye Diamond" : sawIn("Cabal Ritual") && gyN >= 7 ? "Cabal Ritual" : null;
+    if (saw && wit && fuel) out.push({ key: `saw:${saw}+${wit.n}+${fuel}`, name: `${saw} + ${wit.n} + ${fuel}`, pieces: [saw, wit.n, fuel], win: false, kind: "info",
+      desc: fuel === "Cabal Ritual" ? `Cabal Ritual (threshold) makes {B}{B}{B}{B}{B}; ${saw} destroys ${wit.n} for two copies, which return ${saw} and Cabal Ritual. Repeat: infinite ${wit.n} tokens, death and enter triggers, storm and magecraft.`
+        : `Cast ${saw} on ${wit.n}; holding priority, crack Lion's Eye Diamond for three mana. The two copies return ${saw} and the Diamond; recast the Diamond for {0}. Repeat: infinite ${wit.n} tokens, death and enter triggers, storm and magecraft.` }); }
+  // Chain of Smog + a magecraft drain (Witherbloom Apprentice): target yourself and copy it forever
+  { const cs = [...(ctx.hand || []), ...(ctx.cast || [])].find(n => /target player discards two cards\. that player may copy this spell/i.test(lookup(n)?.o || ""));
+    const mc = pick(/magecraft — whenever you cast or copy an instant or sorcery spell, each opponent loses (?:1|one) life/i)[0];
+    if (cs && mc) out.push({ key: `smog:${cs}+${mc.n}`, name: `${cs} + ${mc.n}`, pieces: [cs, mc.n], win: true, kind: "drainAll",
+      desc: `Cast ${cs} targeting yourself. Each time it resolves, discard two (or what you have) and copy it targeting yourself again: every copy is a magecraft trigger, so ${mc.n} drains each opponent forever.` }); }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;
