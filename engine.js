@@ -2424,15 +2424,19 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (fc && rec) out.push({ key: `named:Food Chain+${rec}`, name: `Food Chain + ${rec}`, pieces: ["Food Chain", rec], win: false, kind: "tokens", desc: `Exile ${rec} to Food Chain for mana, cast it again from exile with that mana, and net one extra mana each loop: infinite mana for creature spells.` }); }
   // Squirrel Girl-style engine: "Create X tokens, where X is the number of <type> you control" + every creature taps for mana + haste
   { const grow = ents.map(x => ({ x, m: x.o.match(/^(?:[^\n{]*? — )?\{([^\n:]+?)\}: create x 1\/1 [a-z ]*?([A-Z][a-z]+) creature tokens, where x is the number of \2s you control/im) })).find(y => y.m);
-    const manaAll = pick(/^(?:creatures|tokens|creature tokens|(?:other )?permanents) you control have "\{T\}: Add/im)[0] || ents.find(x => /^Song of Freyalise$/.test(x.n) && (x.e.c?.lore || 1) < 3);
-    const haste = pick(/^(?:all creatures|creatures you control) have haste/im)[0];
+    const tapAll = pick(/^(?:creatures|tokens|creature tokens|(?:other )?permanents) you control have "\{T\}: Add/im)[0] || ents.find(x => /^Song of Freyalise$/.test(x.n) && (x.e.c?.lore || 1) < 3);
+    const hasteSrc = pick(/^(?:all creatures|creatures you control) have haste|^you may activate abilities of creatures you control as though those creatures had haste/im)[0];
+    // no haste needed when the new tokens are sacrificed (Phyrexian Altar) or tapped by another permanent's cost (Supportive Parents)
+    const sacMana = pick(/^sacrifice a creature: add one mana of any color/im)[0], tapTwo = pick(/^tap two untapped creatures you control: add one mana/im)[0];
+    const manaAll = tapAll && hasteSrc ? tapAll : sacMana || tapTwo;
+    const haste = tapAll && hasteSrc ? hasteSrc : manaAll;
     if (grow && manaAll && haste) {
       const typ = grow.m[2], cost = manaValue(`{${grow.m[1]}}`) || 4;
       const tokN = Object.values(p.tokens || {}).filter(t => new RegExp(`\\b${typ}\\b`, "i").test(t.name) && t.count > 0).reduce((a, t) => a + t.count, 0);
       const have = ents.filter(x => new RegExp(`\\b${typ}\\b`).test(x.t)).length + tokN;
       const dbl = pick(/if an effect would create one or more tokens under your control, it creates twice that many/i).length;
       const need = Math.ceil(cost / 2 ** dbl);
-      const pieces = [grow.x.n, manaAll.n, haste.n];
+      const pieces = [...new Set([grow.x.n, manaAll.n, haste.n])];
       out.push({ key: `grow:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: "grow", srcId: grow.x.id, typ, ready: have >= need,
         desc: `Each activation of ${grow.x.n} makes one new ${typ} per ${typ} you have (${have} now${dbl ? `, ×${2 ** dbl} from doublers` : ""}). The new ones have haste and tap for mana (${manaAll.n}), so the next activation pays for itself once you have ${need}+ ${typ}s${have >= need ? "" : ` (${need - have} short right now)`}: as many ${typ}s and as much mana as you want.` });
     } }
@@ -2462,7 +2466,7 @@ export function detectCombos(p, lookup, ctx = {}) {
   const handOrCast = n => (ctx.hand || []).includes(n) || (ctx.cast || []).includes(n);
   // Hullbreaker Horror + a mana rock that makes more than it costs (Sol Ring, Mana Vault, Mox Amber, Mana Crypt) + a cheap permanent:
   // cast the permanent → bounce the rock; recast the rock → bounce the permanent. Two casts per loop; mana left over = rock's mana − both costs
-  { const hh = ents.find(x => /^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o));
+  { const hh = ents.find(x => (/^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o)) || /^whenever you cast a spell, return target permanent to its owner's hand/im.test(x.o)); // Hullbreaker Horror, Tidespout Tyrant
     if (hh) {
       const legCols = ents.filter(x => /\bLegendary\b/.test(x.t) && /\b(Creature|Planeswalker)\b/.test(x.t)).flatMap(x => (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []));
       const rockOut = x => { const m = x.o.match(/^\{T\}: Add ((?:\{C\})+)\.?$/m); if (m) return { n: m[1].length / 3, colorless: true };
@@ -2548,7 +2552,7 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (ub && gs && zero) out.push({ key: `named:Underworld Breach+${gs.n}+${zero.n}`, name: `Underworld Breach + ${gs.n} + ${zero.n}`, pieces: ["Underworld Breach", gs.n, zero.n], win: false, kind: "info",
       desc: `Tap ${gs.n} and sacrifice ${zero.n} (target player mills 3), escape ${zero.n} for free (exile 3 other graveyard cards); it enters and untaps ${gs.n}. Mill yourself to keep the graveyard stocked: infinite self-mill, storm, artifact enter and leave triggers. Breach is sacrificed at the end step.` }); }
   // Hullbreaker Horror + two permanents that cost {0} (Ornithopter, Memnite, Mox Opal…): each cast bounces the other
-  { const hh = ents.find(x => /^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o));
+  { const hh = ents.find(x => (/^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o)) || /^whenever you cast a spell, return target permanent to its owner's hand/im.test(x.o)); // Hullbreaker Horror, Tidespout Tyrant
     if (hh && !out.some(c => c.key.startsWith("hull:"))) {
       const arts = ents.filter(x => /\bArtifact\b/.test(x.t)).length;
       const free = n => { const c = lookup(n); if (!c || /\bLand\b/.test(c.t || "") || !/\b(Artifact|Creature|Enchantment|Planeswalker)\b/.test(c.t || "")) return false;
@@ -2627,6 +2631,53 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (chasmIn && fromGy.length && extra.length) { const pieces = [...new Set(["Glacial Chasm", fromGy[0].n, extra[0].n])];
       out.push({ key: `chasm:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: "info",
         desc: `Play Glacial Chasm (it sacrifices another land), then replay that land from your graveyard. At upkeep, skip the cost, sacrifice Chasm and play it again from your graveyard: all damage to you is prevented forever. Your creatures can't attack while it's out.` }); } }
+  // Kiki-Jiki / Splinter Twin + a creature whose "enters" untaps (Pestermite, Zealous Conscripts…) or Combat Celebrant: infinite hasty copies
+  { const untapETB = o => /^when (?:this creature|[^,]+) enters, (?:you may )?(?:tap or untap|untap) (?:target|up to one target|another target) (?:nonland )?(?:permanent|creature|artifact or creature)/im.test(o) || /^when (?:this creature|[^,]+) enters, gain control of target permanent until end of turn\. untap that permanent/im.test(o) || /untap all other creatures you control and after this phase, there is an additional combat phase/i.test(o);
+    const kiki = ents.find(x => /^\{T\}: Create a token that's a copy of target nonlegendary creature you control, except it has haste/im.test(x.o));
+    const twin = ents.find(x => /^enchanted creature has "\{T\}: Create a token that's a copy of this creature, except it has haste/im.test(x.o) && x.e.att);
+    const twinOn = twin && ents.find(y => y.id === twin.e.att);
+    const mates = ents.filter(x => /\bCreature\b/.test(x.t) && !/\bLegendary\b/.test(x.t) && untapETB(x.o));
+    if (kiki && mates.length && !out.some(c => c.pieces?.includes(kiki.n))) { const m = mates[0]; const cel = /additional combat phase/i.test(m.o);
+      out.push({ key: `copyuntap:${kiki.n}+${m.n}`, name: `${kiki.n} + ${m.n}`, pieces: [kiki.n, m.n], win: false, kind: "tokens", tokenOf: m.n,
+        desc: cel ? `${kiki.n} copies ${m.n}; the hasty copy attacks and exerts, untapping ${kiki.n} with an extra combat: infinite combats and hasty tokens.` : `${kiki.n} copies ${m.n}; the copy's "enters" untaps ${kiki.n}. Repeat: infinite hasty ${m.n} tokens.` }); }
+    if (twinOn && untapETB(twinOn.o)) out.push({ key: `twin:${twinOn.n}`, name: `${twin.n} + ${twinOn.n}`, pieces: [twin.n, twinOn.n], win: false, kind: "tokens", tokenOf: twinOn.n,
+      desc: `${twinOn.n} taps (Splinter Twin) to copy itself; the hasty copy's "enters" untaps the original. Repeat: infinite hasty ${twinOn.n} tokens.` });
+    const rio = ents.find(x => /^at the beginning of combat on your turn, create x tokens that are copies of another target creature you control/im.test(x.o));
+    const cel = ents.find(x => /untap all other creatures you control and after this phase, there is an additional combat phase/i.test(x.o));
+    if (rio && cel) out.push({ key: `rio:${rio.n}+${cel.n}`, name: `${rio.n} + ${cel.n}`, pieces: [rio.n, cel.n], win: false, kind: "info",
+      desc: `Each combat ${rio.n} copies ${cel.n}; a copy exerts as it attacks for another combat, where ${rio.n} makes more copies: infinite combats.` }); }
+  // Dualcaster Mage + a spell that copies or blinks a creature (Twinflame, Heat Shimmer, Saw in Half, Ghostly Flicker…)
+  { const hc = [...(ctx.hand || []), ...(ctx.cast || [])];
+    const dual = hc.find(n => /^when (?:this creature|[^,]+) enters, copy target instant or sorcery spell/im.test(lookup(n)?.o || "") && /^Flash\b/m.test(lookup(n)?.o || "")) || ents.find(x => false)?.n;
+    const spell = dual && hc.find(n => n !== dual && /\b(Instant|Sorcery)\b/.test(lookup(n)?.t || "") && /tokens? that(?:'s| are) (?:a )?cop(?:y|ies) of (?:target|another target|up to \w+ target|that) (?:artifact or )?creature|its controller creates two tokens that are copies of that creature|exile (?:two )?target [^.]*?(?:you control|you own)[^.]*?,? then return|exile (?:two )?target (?:artifacts?, creatures?,? and\/or lands?|nonland permanents?|creatures?)[^.]*?\. return (?:that card|those cards|them|it)/i.test(lookup(n)?.o || ""));
+    if (dual && spell) out.push({ key: `dual:${dual}+${spell}`, name: `${dual} + ${spell}`, pieces: [dual, spell], win: false, kind: "info",
+      desc: `Cast ${spell}, then flash in ${dual} copying it, targeting ${dual}: each new ${dual} copies the spell again. Repeat: infinite hasty ${dual} tokens or enters and leaves triggers.` }); }
+  // Cloudstone Curio + two creatures that cost {0}: each one entering returns the other
+  { const curio = pick(/^whenever a nonartifact permanent you control enters, you may return another permanent you control that shares a permanent type with it to its owner's hand/im)[0];
+    if (curio) { const free = [...new Set([...ents.map(x => x.n), ...(ctx.hand || [])])].filter(n => { const c = lookup(n); return c && /\bCreature\b/.test(c.t || "") && !/\bArtifact\b/.test(c.t || "") && c.m != null && manaValue(String(c.m)) === 0; });
+      if (free.length >= 2) out.push({ key: `curio:${free[0]}+${free[1]}`, name: `${curio.n} + ${free[0]} + ${free[1]}`, pieces: [curio.n, free[0], free[1]], win: false, kind: "info",
+        desc: `Cast ${free[0]} for free: ${curio.n} returns ${free[1]}; cast ${free[1]}: it returns ${free[0]}. Repeat: infinite storm count, cast and enter triggers.` }); } }
+  // Persist/undying loops: a free sacrifice outlet + something that cancels the counter (Mikaeus's undying on a persist creature, Metallic Mimic's extra +1/+1)
+  { const outlet = sac[0] || pick(/^sacrifice another creature: /im).find(x => !/^sacrifice another creature: [^\n]*\{T\}/im.test(x.o));
+    const kw = (x, k) => new RegExp(`^${k}\\b`, "im").test(x.o);
+    const mik = pick(/other non-human creatures you control get \+1\/\+1 and have undying/i)[0], mimic = pick(/each other creature you control of the chosen type enters with an additional \+1\/\+1 counter/i)[0];
+    const persistC = ents.find(x => /\bCreature\b/.test(x.t) && kw(x, "persist") && !/\bHuman\b/.test(x.t));
+    const helper = (mik && persistC) ? mik : (mimic && persistC) ? mimic : null;
+    if (outlet && helper && persistC) { const pieces = [...new Set([outlet.n, helper.n, persistC.n])];
+      out.push({ key: `persist:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: "info",
+        desc: helper === mik ? `Sacrifice ${persistC.n} to ${outlet.n}: persist returns it with a −1/−1 counter; next time undying (from ${mik.n}) returns it with a +1/+1 counter, which cancels the −1/−1. Repeat: infinite death and enter triggers.` : `${persistC.n} comes back with persist's −1/−1 counter and ${mimic.n}'s extra +1/+1 counter, which cancel out (if it's the chosen type). Sacrifice it to ${outlet.n} again: infinite death and enter triggers.` }); }
+    // Yawgmoth: pay 1 life and sacrifice to put a −1/−1 counter on an undying creature (clearing its +1/+1), with a death payoff paying the life back
+    const yaw = pick(/^pay 1 life, sacrifice another creature: put a -1\/-1 counter on up to one target creature and draw a card/im)[0];
+    const undC = ents.filter(x => /\bCreature\b/.test(x.t) && x.id !== yaw?.id && (kw(x, "undying") || (mik && x.id !== mik.id && !/\bHuman\b/.test(x.t))));
+    const pay = pick(/whenever (?:this creature or another|another|a) creature(?: you control)? dies, [^.]*(?:you gain (?:1|one) life|loses (?:1|one) life and you gain)/i)[0] || pick(/whenever another creature dies, target opponent loses 1 life and you gain 1 life/i)[0];
+    if (yaw && undC.length >= 2 && pay) { const pieces = [...new Set([yaw.n, undC[0].n, undC[1].n, pay.n])];
+      out.push({ key: `yawg:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: true, kind: "drainAll",
+        desc: `Pay 1 life and sacrifice one undying creature to ${yaw.n}, putting the −1/−1 counter on the other (cancelling its +1/+1). The sacrificed one returns with undying; ${pay.n} pays back the life. Repeat: draw your deck and drain everyone.` }); } }
+  // Staff of Domination / Umbral Mantle + a creature that taps for four or more mana
+  { const unt = pick(/^\{3\}, \{T\}: Untap target creature\.?$/im)[0] || pick(/equipped creature has "\{3\}, \{Q\}: This creature gets \+2\/\+2/i)[0];
+    const big = unt && ents.find(x => /\bCreature\b/.test(x.t) && /^\{T\}: Add (?:\{G\} for each|an amount of \{G\} equal to|X mana of any one color|\{G\}\{G\}\{G\}\{G\})/im.test(x.o));
+    if (unt && big) out.push({ key: `untap4:${unt.n}+${big.n}`, name: `${unt.n} + ${big.n}`, pieces: [unt.n, big.n], win: false, kind: "info",
+      desc: `If ${big.n} makes four or more mana: tap it, spend three to untap it with ${unt.n}${/Umbral/.test(unt.n) ? " (it must be equipped)" : ""}, keep the rest. Repeat for infinite mana${/Staff/.test(unt.n) ? " (then the Staff's other abilities give infinite life and cards)" : ""}.` }); }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;
