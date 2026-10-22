@@ -1765,6 +1765,7 @@ export function activatedAbilities(card) {
       sacMany: (() => { const m = lc.match(/sacrifice (two|three|four|five|six|\d+) ([a-z]+?)s?(?:,|$)/); return m && !/^(creature|artifact|permanent|land|enchantment)$/.test(m[2]) ? { n: num(m[1]), what: m[2] } : null; })(),
       sacN: (() => { const m = lc.match(/sacrifice (two|three|four|five|six|seven|eight|nine|ten|\d+) ((?:non[a-z]+ |other )?(?:creature|artifact|permanent|land|enchantment))s(?:,|$)/); return m ? { n: num(m[1]), what: m[2] } : null; })(),
       sacOther: /sacrifice (x|two|three|\d+) /.test(lc),
+      sacAnother: /sacrifice another /.test(lc),
       forage: /\bforage\b/.test(lc),
       exileSelf: new RegExp(`(?:^|, |and )exile (?:it|this [a-z]+|${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").toLowerCase()})(?:,|$)`).test(lc),
       remove: (() => { const r = lc.match(/remove (a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+) ([a-z+/1-]+) counters? from/); return r ? { n: num(r[1]), key: counterKey(r[2]) } : null; })(),

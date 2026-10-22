@@ -757,7 +757,7 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.21a";
+const APP_VERSION = "2026.10.21b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
 const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261021a" alt="" aria-hidden="true">`; // the jeweled tome
@@ -2994,8 +2994,9 @@ function startController(code, pid) {
         { const fc = sents.filter(x => /^you may cast [^.]* from among (?:them|those cards)/i.test(x)); if (fc.length && (effs.length || sp.auto)) reminders.push({ id: newId(), src: dispName(card), text: fc.join(" "), times: 1 }); }
         if (sp.auto) { const fl = sents.filter(x => /^creatures you control with [a-z ]+ get [+-]\d+\/[+-]\d+/i.test(x)); if (fl.length && !sp.effs.some(f => f.k === "pumpAll")) reminders.push({ id: newId(), src: dispName(card), text: fl.join(" "), times: 1 }); }
         if (sp.auto) { const th = sents.filter(x => /^then (?:you )?(?:put|return)\b/i.test(x)); if (th.length && !sp.effs.some(f => /regrow|reanimate|fetch|necro/i.test(f.k))) reminders.push({ id: newId(), src: dispName(card), text: th.map(x => x.replace(/^then /i, "").replace(/^\w/, c => c.toUpperCase())).join(" "), times: 1 }); }
+        if (/draw a card for each creature that died under your control this turn/i.test(card.o)) { const dn = me.deaths?.t === (room.turnNo || 0) ? me.deaths.n || 0 : 0; reminders.push({ id: newId(), src: dispName(card), text: `Draw ${dn === 1 ? "a card" : `${dn} cards`} (${dn} of your creatures died this turn).`, times: 1, ...(dn ? { drawN: dn } : {}) }); }
         const fresh = reminders.some(x => !snap.has(x.id));
-        if (simple.length && !sp.auto && sp.effs.some(f => f.k === "tok") && !effs.some(f => f.k === "tok")) { const ts = sents.find(x => /\bcreate\b/i.test(x)); reminders.push({ id: newId(), src: dispName(card), text: (ts || "Create the tokens.").replace(/^\w/, c => c.toUpperCase()), times: 1, effs: sp.effs.filter(f => f.k === "tok") }); }
+        if ((simple.length || sents.some(x => /^create (?:a|an|one|two|three|\d+) [^.]*tokens?\b/i.test(x) && !/\b(?:if|for each|that many|X)\b/.test(x))) && !sp.auto && sp.effs.some(f => f.k === "tok") && !effs.some(f => f.k === "tok")) { let ts = sents.find(x => /\bcreate\b/i.test(x)); if (ts && ts.split('"').length % 2 === 0) ts = (card.o.match(/create [^"]*?tokens? with "[^"]*"\.?/i) || [ts])[0]; reminders.push({ id: newId(), src: dispName(card), text: (ts || "Create the tokens.").replace(/^\w/, c => c.toUpperCase()), times: 1, effs: sp.effs.filter(f => f.k === "tok") }); }
         { const lt = !simple.length && !sp.effs.some(f => /^draw|adnaus|rummage|tdraw/.test(f.k)) && sents.map(x => x.match(/^draw (a|one|two|three|four|\d+) cards?, then discard/i)).find(Boolean); // looting: Frantic Search, Faithless Looting
           if (lt) reminders.push({ id: newId(), src: dispName(card), text: `Draw ${lt[1] === "a" ? "a card" : `${lt[1]} cards`}.`, times: 1, drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4 })[lt[1].toLowerCase()] || Number(lt[1]) }); }
         if (simple.length && !sp.effs.some(f => /^draw|adnaus|rummage|tdraw/.test(f.k))) reminders.push({ id: newId(), src: dispName(card), text: simple.map(x => x.replace(/^\w/, c => c.toUpperCase())).join(" "), times: 1, ...(dm ? { drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4 })[dm[1].toLowerCase()] || Number(dm[1]) } : {}) });
@@ -7146,9 +7147,9 @@ function startController(code, pid) {
       else if (opts.sac?.startsWith("bf:")) sacCard = opts.sac.slice(3);
       else {
         tokKey = Object.keys(me.tokens || {}).find(k => me.tokens[k].name.toLowerCase() === want && me.tokens[k].count > 0) || null;
-        const choices = sacChoices(want);
+        const choices = sacChoices(want).filter(([v]) => !c.sacAnother || v !== `bf:${id}`);
         // Ashnod's Altar & co: when there's a real choice, ask what to sacrifice
-        if ((!tokKey || choices.length > 1) && choices.length) { reminders.push({ id: newId(), src: name, text: `Sacrifice ${/^[aeiou]/i.test(want) ? "an" : "a"} ${want} (cost): which one?`, times: 1, sacCost: { id, i, what: want } }); render(); return; }
+        if ((!tokKey || choices.length > 1) && choices.length) { reminders.push({ id: newId(), src: name, text: `Sacrifice ${/^[aeiou]/i.test(want) ? "an" : "a"} ${want} (cost): which one?`, times: 1, sacCost: { id, i, what: want, notSelf: !!c.sacAnother } }); render(); return; }
         if (!tokKey) { toast(`No ${c.sacWhat} to sacrifice.`); return; }
       }
     }
