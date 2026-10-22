@@ -2393,7 +2393,6 @@ const NAMED_COMBOS = [
   { all: ["Najeela, the Blade-Blossom", "Derevi, Empyrial Tactician"], win: false, kind: "manual", desc: "With five or more attackers connecting, Derevi untaps five lands for Najeela's {W}{U}{B}{R}{G}: untap everything and take another combat — infinite combats (and Warriors)." },
   { all: ["Deadeye Navigator", "Peregrine Drake"], needPair: true, win: false, kind: "manual", desc: "Paired with Deadeye Navigator, Peregrine Drake blinks for {1}{U} and untaps five lands: infinite mana and enter/leave triggers." },
   { all: ["Basalt Monolith", "Power Artifact"], win: false, kind: "mana", desc: "Monolith untaps for {1} with Power Artifact: infinite colorless mana." },
-  { all: ["Gravecrawler", "Phyrexian Altar"], needZombie: true, win: false, kind: "loop", desc: "Sacrifice Gravecrawler for {B}, recast it from your graveyard: infinite death and enters triggers (needs another Zombie)." },
   ...["Zealous Conscripts", "Pestermite", "Deceiver Exarch", "Village Bell-Ringer", "Restoration Angel", "Felidar Guardian"].map(x => ({ all: ["Kiki-Jiki, Mirror Breaker", x], win: false, kind: "tokens", tokenOf: x, desc: `Kiki-Jiki copies ${x}, the copy untaps Kiki-Jiki: infinite hasty ${x} tokens.` })),
 ];
 export function detectCombos(p, lookup, ctx = {}) {
@@ -2678,6 +2677,37 @@ export function detectCombos(p, lookup, ctx = {}) {
     const big = unt && ents.find(x => /\bCreature\b/.test(x.t) && /^\{T\}: Add (?:\{G\} for each|an amount of \{G\} equal to|X mana of any one color|\{G\}\{G\}\{G\}\{G\})/im.test(x.o));
     if (unt && big) out.push({ key: `untap4:${unt.n}+${big.n}`, name: `${unt.n} + ${big.n}`, pieces: [unt.n, big.n], win: false, kind: "info",
       desc: `If ${big.n} makes four or more mana: tap it, spend three to untap it with ${unt.n}${/Umbral/.test(unt.n) ? " (it must be equipped)" : ""}, keep the rest. Repeat for infinite mana${/Staff/.test(unt.n) ? " (then the Staff's other abilities give infinite life and cards)" : ""}.` }); }
+  // Recursion loops: a creature that comes back from the graveyard + a sac outlet, when the outlet and death triggers pay for the trip back
+  { const OUT_RE = /^(?:pay 1 life, )?sacrifice (?:a|another) creature: ([^\n]*)/im;
+    const outlets = ents.filter(x => OUT_RE.test(x.o) && !/\{T\}/.test(x.o.match(OUT_RE)[0].replace(/\([^)]*\)/g, "")));
+    const outMana = x => { const l = x.o.match(OUT_RE)[1]; return /add one mana of any color|create a treasure token/i.test(l) ? { c: 1, n: 1 } : /add \{C\}\{C\}/i.test(l) ? { c: 0, n: 2 } : { c: 0, n: 0 }; };
+    const treas = ents.filter(x => /whenever another creature you control dies, create a treasure token/i.test(x.o));
+    const spawn = ents.filter(x => /whenever (?:this creature or )?another nontoken creature you control dies,[^.]*?(?:scion|spawn) creature token/i.test(x.o));
+    const rooftop = ents.find(x => /you may pay \{0\} rather than pay the mana cost for zombie creature spells/i.test(x.o));
+    const crime = ents.find(x => /whenever (?:this creature or )?another creature dies, target (?:player|opponent) loses/i.test(x.o));
+    const drain = ents.find(x => /whenever (?:this creature or )?another creature (?:you control )?dies, (?:each opponent|target player|target opponent) loses/i.test(x.o));
+    const gyE = Object.values(p.gy || {}).map(e => ({ n: e.n, e, o: String(lookup(e.n)?.o || e.o || ""), t: e.t || lookup(e.n)?.t || "" }));
+    const zombies = ents.filter(x => /\bZombie\b/.test(x.t));
+    const seen = new Set();
+    [...ents, ...gyE].filter(x => /\bCreature\b/.test(x.t)).forEach(r => {
+      if (seen.has(r.n)) return; let cost = null, why = "";
+      if (/you may cast this card from your graveyard as long as you control a zombie/i.test(r.o)) { if (!zombies.some(z => z.n !== r.n)) return; cost = rooftop && /\bZombie\b/.test(r.t) ? "" : (lookup(r.n)?.m || r.e.m || ""); why = "recast it from your graveyard"; }
+      else { let m = r.o.match(/^((?:\{[^}]+\})+): return this card from your graveyard to the battlefield/im); if (m) { cost = m[1]; why = "return it"; }
+        else if ((m = r.o.match(/whenever another creature is put into your graveyard from the battlefield, you may pay ((?:\{[^}]+\})+)\. if you do, return this card/i))) { if (!spawn.length) return; cost = m[1]; why = "a Spawn dying returns it"; }
+        else if ((m = r.o.match(/whenever you commit a crime, you may pay ((?:\{[^}]+\})+)\. if you do, return this card/i))) { if (!crime) return; cost = m[1]; why = `${crime.n} targeting an opponent returns it`; } }
+      if (cost == null) return;
+      const need = { c: (cost.match(/\{[WUBRG](?:\/[WUBRGP])?\}/g) || []).length, n: manaValue(cost) };
+      const outlet = outlets.filter(o => o.n !== r.n).map(o => ({ o, m: outMana(o) })).sort((a, b) => b.m.n - a.m.n)[0]; if (!outlet) return;
+      const extra = [...treas.map(x => ({ x, c: 1, n: 1 })), ...spawn.map(x => ({ x, c: 0, n: 1 }))].filter(e => e.x.n !== r.n && e.x.n !== outlet.o.n);
+      let c = outlet.m.c, n = outlet.m.n; const used = [];
+      for (const e of extra) { if (c >= need.c && n >= need.n) break; c += e.c; n += e.n; used.push(e.x.n); }
+      if (c < need.c || n < need.n) return;
+      seen.add(r.n);
+      const pay = drain && drain.n !== r.n ? drain : null;
+      const pieces = [...new Set([r.n, outlet.o.n, ...used, ...(rooftop && cost === "" ? [rooftop.n] : []), ...(/crime/.test(why) ? [crime.n] : []), ...(pay ? [pay.n] : [])])];
+      out.push({ key: `recur:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: !!pay, kind: "info",
+        desc: `Sacrifice ${r.n} to ${outlet.o.n}, then ${why}${need.n ? ` for ${cost}, paid with the mana the loop makes` : " for free"}. Repeat: infinite death and enters triggers${pay ? `; ${pay.n} drains each time` : ""}.` });
+    }); }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;

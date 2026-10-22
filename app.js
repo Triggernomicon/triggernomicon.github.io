@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261022a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261022a";
+import { firebaseConfig } from "./config.js?v=20261022b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj } from "./engine.js?v=20261022b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,10 +757,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.22a";
+const APP_VERSION = "2026.10.22b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.`;
 
@@ -2870,6 +2870,8 @@ function startController(code, pid) {
     if (castKey && castHaste) { opts = { ...opts, haste: castHaste }; castHaste = null; }
     if (castKey && !opts.copy && !/\bCreature\b/.test(card.t || "")) setTimeout(() => eqCounterTrigger("noncreature spell"), 0);
     if (castKey && !opts.copy) { const ext = Object.values(me.bf || {}).filter(e => /^Extort\b/m.test(e.o || lookupCard(e.n)?.o || "")); if (ext.length) { reminders.push({ id: newId(), src: ext.length > 1 ? `Extort ×${ext.length}` : `${dispName(ext[0])} (extort)`, text: `You may pay {W/B}${ext.length > 1 ? ` up to ${ext.length} times` : ""}. Each time: each opponent loses 1 life and you gain that much.`, times: 1, extort: ext.length }); setTimeout(render, 0); } }
+    if (castKey && !opts.copy) { const nC = String(card.o || "").split("\n").filter(l => /^Cascade\b/i.test(l)).reduce((t, l) => t + (l.replace(/\([^)]*\)/g, "").match(/\bcascade\b/gi) || []).length, 0);
+      if (nC) { const mv = manaValue(costOf(card)); reminders.push({ id: newId(), src: dispName(card), text: `Cascade${nC > 1 ? ` ×${nC}` : ""}: exile cards from the top of your library until you exile a nonland card with mana value less than ${mv}. You may cast it without paying its mana cost; put the rest on the bottom in a random order.${nC > 1 ? " Repeat for each cascade." : ""}`, times: 1 }); } }
     if (isSpell(card)) {
       logTo(code, `${me.name} cast ${dispName(card)}`); toast(`Cast ${dispName(card)}`);
       // costs and cast triggers stay even if the spell is countered
@@ -4505,7 +4507,7 @@ function startController(code, pid) {
       Object.values(p.bf || {}).forEach(e => {
         if (!e.tap || !fits(e)) return;
         if (e.c?.stun) { e.c.stun -= 1; if (!e.c.stun) delete e.c.stun; stunned.push(dispName(e)); return; }
-        if (mine && /doesn't untap during (your|its controller's) untap step/i.test(e.o || lookupCard(e.n)?.o || "")) { held.push(dispName(e)); return; }
+        if (mine && selfNoUntap(e)) { held.push(dispName(e)); return; }
         if (e.lockBy) { if (lockHeld(e.lockBy)) { held.push(`${dispName(e)} (${e.lockBy.src})`); return; } delete e.lockBy; }
         delete e.tap; untapNow.n++;
       });
@@ -4532,7 +4534,7 @@ function startController(code, pid) {
     Object.entries(me.bf || {}).forEach(([id, e]) => {
       if (!e.tap) return;
       if (isBlocked(e)) { held.add(id); notes.push(`${dispName(e)} (${blocks.find(r => permMatch(e, r.block) && statOk(e, r.stat)).src})`); return; }
-      if (/doesn't untap during (your|its controller's) untap step/i.test(e.o || lookupCard(e.n)?.o || "")) { held.add(id); notes.push(dispName(e)); }
+      if (selfNoUntap(e)) { held.add(id); notes.push(dispName(e)); }
       else if (lockHeld(e.lockBy)) { held.add(id); notes.push(`${dispName(e)} (${e.lockBy.src})`); }
     });
     // anything a limit covers waits for your pick
@@ -5658,6 +5660,9 @@ function startController(code, pid) {
         reminders.push(normalizeRem({ id: newId(), src: dispName(a), srcId: sid, text: m[1][0].toUpperCase() + m[1].slice(1) + ".", times: 1 }));
     });
   }
+  // "This creature doesn't untap during your untap step" (its own text, not a target's, like Ty Lee's)
+  function selfNoUntap(e) { const nm = String(e.n || "").split(" // ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|[.:]\\s+)(?:this (?:creature|artifact|permanent|land|vehicle)|${nm}) doesn't untap during (?:your|its controller's) untap step`, "im").test(e.o || lookupCard(e.n)?.o || ""); }
   function moveOut(id, dest) {
     const e = me.bf?.[id];
     if (!e) return;
@@ -10667,7 +10672,7 @@ function startController(code, pid) {
         if (best) reminders.push({ id: newId(), src: dispName(x), text: `Main phase: add ${best} mana of one color (most Islands an opponent controls).`, times: 1, anyColor: true, anyN: best, anyOne: true }); });
       { const dd = (me.delayDraw || []).filter(d => d.turnNo < (room.turnNo || 0));
         if (dd.length) { mutate(p => { p.delayDraw = (p.delayDraw || []).filter(d => d.turnNo >= (room.turnNo || 0)); if (!p.delayDraw.length) delete p.delayDraw; }); dd.forEach(d => reminders.push(normalizeRem({ id: newId(), src: d.src, text: "Draw a card (this upkeep).", times: 1 }))); } }
-      if (mine) { const cum = Object.entries(me.bf || {}).map(([id, e]) => [id, e, (String(e.o || lookupCard(e.n)?.o || "").match(/^Cumulative upkeep[—-]\s*([^(\n]+?)\.?\s*(?:\(|$)/m) || [])[1]]).filter(x => x[2]);
+      if (mine) { const cum = Object.entries(me.bf || {}).map(([id, e]) => [id, e, (String(e.o || lookupCard(e.n)?.o || "").match(/^Cumulative upkeep(?:\s*[—-]\s*|\s+)([^(\n]+?)\.?\s*(?:\(|$)/m) || [])[1]]).filter(x => x[2]);
         if (cum.length) { mutate(p => cum.forEach(([id]) => { const x = p.bf?.[id]; if (x) { x.c ||= {}; x.c.x_age = (x.c.x_age || 0) + 1; } }));
           cum.forEach(([id, e, cost]) => { const n = (me.bf?.[id]?.c?.x_age || 0) || 1, lf = (cost.match(/^pay (\d+) life$/i) || [])[1];
             reminders.push({ id: newId(), src: dispName(e), srcId: id, text: `Cumulative upkeep: ${cost} ×${n} (age counters), or sacrifice ${dispName(e)}.`, times: 1, cumUp: { id, cost, n, life: lf ? Number(lf) : 0 } }); }); } }
