@@ -691,13 +691,14 @@ function parseCond(cond, cardName) {
   if (/^(?:this creature|[a-z ,'-]+?) or another creature dies$/.test(c)) return { ev: "dies", nontoken: false, mine: false, opp: false, other: false };
   { const oz = c.match(/^(?:this creature|[a-z ,'-]+?) or another ([a-z]+) (you control )?dies$/); if (oz && !/^(creature|permanent|token)$/.test(oz[1])) return { ev: "dies", types: [oz[1]], nontoken: false, mine: !!oz[2], opp: false, other: false }; } // Vengeful Dead: "this creature or another Zombie"
   if (/^(?:a|one or more) tokens? you control leaves? the battlefield$/.test(c)) return { ev: "tokleave", once: /one or more/.test(c) };
-  if (c === `${short} becomes tapped` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} becomes tapped` || /^this (creature|permanent|artifact|land) becomes tapped$/.test(c)) return { ev: "selftap" };
+  if (c === `${short} becomes tapped` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} becomes tapped` || /^this (creature|permanent|artifact|land) becomes tapped$/.test(c) || c === `${short} become tapped`) return { ev: "selftap" };
   if (/^you put one or more -1\/-1 counters on a creature$/.test(c)) return { ev: "m1m1put" };
   if (/^(?:one or more |a )?-1\/-1 counters? (?:is|are) put on (?:a|one or more) creatures?$/.test(c)) return { ev: "m1m1put", check: true, askNote: "Fires on -1/-1 counters you put with the app; add any others by hand." }; // Flourishing Defenses, Wickersmith's Tools (your own counters; others' by hand)
   if (/^you discard (a|one or more) cards?$/.test(c)) return { ev: "discard", once: /one or more/.test(c) };
+  { const dk = c.match(/^you discard (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (dk) return { ev: "discard", once: false, check: true, askNote: `Only if you discarded a ${dk[1]} card.` }; } // Bone Miser, Surly Badgersaur: the app doesn't know which card
   if (/^you cycle or discard (?:another|a) card$/.test(c)) return { ev: "discard", once: false }; // Archfiend of Ifnir (cycling is caught where you cycle)
   if (/^an opponent discards (a|one or more) cards?$/.test(c)) return { ev: "oppdiscard", once: /one or more/.test(c) };
-  if (c === `${short} dies` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} dies` || /^this (creature|permanent) dies$/.test(c)) return { ev: "selfdies" };
+  if (c === `${short} dies` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} dies` || /^this (creature|permanent|vehicle) dies$/.test(c)) return { ev: "selfdies" };
   if (/^you choose a creature as your ring-bearer$/.test(c)) return { ev: "ringbearer" };
   const akw = c.match(/^(?:a|another) creature you control with ([a-z ]+?) attacks$/);
   if (akw && !c.startsWith(short)) return { ev: "attack", types: null, kw: akw[1].trim(), other: /^another/.test(c) };
@@ -717,8 +718,9 @@ function parseCond(cond, cardName) {
   if (/^one or more other creatures die$/.test(c)) return { ev: "dies", nontoken: false, mine: false, opp: false, other: true, once: true };
   if (/^one or more (nontoken )?creatures you control die$/.test(c)) return { ev: "dies", nontoken: /nontoken/.test(c), mine: true, other: false, once: true };
   if (/^one or more nontoken creatures die$/.test(c)) return { ev: "dies", nontoken: true, mine: false, opp: false, other: false, once: true }; // Ghoulish Procession
+  { const to = c.match(/^(?:a|an) ([a-z]+) an opponent controls dies$/); if (to && !/^(creature|permanent|token|card|player|source)$/.test(to[1])) return { ev: "dies", types: [singular(to[1])], nontoken: false, mine: false, opp: true, other: false }; } // Hansk: "a Zombie an opponent controls dies"
   { const ta = c.match(/^(?:a|an|another) ([a-z]+) (you control )?dies$/); if (ta && !/^(creature|permanent|token|card|player|source)$/.test(ta[1])) return { ev: "dies", types: [singular(ta[1])], nontoken: false, mine: !!ta[2], opp: false, other: /^another/.test(c) }; } // Hungry Lynx ("a Rat dies"), Atla Palani ("an Egg you control dies")
-  { const td = c.match(/^(a|another|one or more) (nontoken )?(?:other )?([a-z]+(?:,? (?:or|and\/or) [a-z]+)*) you control (?:dies|die)$/); if (td && !/\bcreatures?\b|\btokens?\b|\bpermanents?\b/.test(td[3]) && !c.startsWith(short)) return { ev: "dies", types: splitTypes(td[3]), nontoken: !!td[2], mine: true, opp: false, other: td[1] === "another" || /\bother\b/.test(c), once: td[1] === "one or more" }; }
+  { const td = c.match(/^(a|another|one or more) (nontoken )?(?:other )?([a-z]+(?:,? (?:or |and\/or )?[a-z]+)*) you control (?:dies|die)$/); if (td && !/\bcreatures?\b|\btokens?\b|\bpermanents?\b/.test(td[3]) && !c.startsWith(short)) return { ev: "dies", types: splitTypes(td[3]), nontoken: !!td[2], mine: true, opp: false, other: td[1] === "another" || /\bother\b/.test(c), once: td[1] === "one or more" }; }
   if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) && !/^this (?:creature|permanent) or another\b/.test(c) };
   let m = c.match(/you sacrifice (one or more|a|an|another) ([\w -]+?)(?: you control)?$/);
   if (m) return { ev: "sac", what: m[2], once: m[1] === "one or more" };
@@ -791,6 +793,12 @@ export function kwExpand(o) {
     // Sunburst and Devour: counters on entering that depend on how it was cast or what was sacrificed: ask on entering
     .replace(/^Sunburst\b[^\n]*/m, m => `${m}\nWhen this permanent enters, it gets one ${/creature enters/i.test(m) ? "+1/+1" : "charge"} counter for each color of mana spent to cast it. Add them by hand on the card.`)
     .replace(/^Devour (land |artifact )?(\d+)[^\n]*/m, (m, what, n) => `${m}\nWhen this creature enters, devour: you may sacrifice any number of ${(what || "creature ").trim()}s; it gets ${n === "1" ? "one +1/+1 counter" : `${kwNum(n)} +1/+1 counters`} for each. Move them to the graveyard and add the counters by hand on the card.`)
+    // "Whenever this creature attacks or dies, …" (Balor), "deals combat damage to a player or dies" (Park Heights Maverick): two triggers, one effect
+    .replace(/^(Whenever|When) this (creature|permanent) ([^,\n]+?) or dies, ([^\n]+)/gm, (m, w, what, a, e) => /\b(?:enters|attacks and|blocks or)\b/.test(a) ? m : `Whenever this ${what} ${a}, ${e}\nWhen this ${what} dies, ${e}`)
+    // "Whenever you cast a black spell or a Swamp you control enters, …" (the Magus Staffs)
+    .replace(/^Whenever you cast (an? [^,\n]+? spell) or (an? [^,\n]+? enters), ([^\n]+)/gm, (_, a, b, e) => `Whenever you cast ${a}, ${e}\nWhenever ${b}, ${e}`)
+    // "At the beginning of your upkeep and whenever you cast a white spell, …" (Shrines)
+    .replace(/^(At the beginning of [^,\n]+?) and (whenever [^,\n]+), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
     // "When X enters and at the beginning of your upkeep, …" (Minsc & Boo): two triggers with one effect
     .replace(/^(When [^,\n]*? enters) and (at the beginning of [^,\n]+), ([^\n]+)/m, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
     .replace(/^Training\b[^\n]*/m, "Whenever this creature attacks with another creature with greater power, put a +1/+1 counter on this creature.")
@@ -807,7 +815,7 @@ export function parseAbilities(card) {
   // Class levels: abilities under "{1}{B}: Level 2" only work once the Class reaches that level
   let curLvl = 1, curLine = "";
   const push0 = out.trig.push.bind(out.trig);
-  out.trig.push = (...a) => push0(...a.map(x => ({ ...x, ...(curLvl > 1 ? { lvl: curLvl } : {}), ...(/this ability triggers only once each turn|do this only once each turn|^(?:[^\n]* — )?whenever [^,]*\bfor the first time (?:each|this) turn\b/i.test(curLine) ? { onceTurn: true } : {}) })));
+  out.trig.push = (...a) => push0(...a.map(x => ({ ...x, ...(curLvl > 1 ? { lvl: curLvl } : {}), ...(/^Max speed — /i.test(curLine.trim()) ? { maxSpeed: true } : {}), ...(/this ability triggers only once each turn|do this only once each turn|^(?:[^\n]* — )?whenever [^,]*\bfor the first time (?:each|this) turn\b/i.test(curLine) ? { onceTurn: true } : {}) })));
   for (let li = 0; li < allLines.length; li++) {
     let line = allLines[li];
     curLine = line;
@@ -1167,7 +1175,7 @@ function matches(cond, ev, srcId) {
       const mine = ev.id ? (curP.bf?.[ev.id] && isT(curP.bf[ev.id]) ? 1 : 0) : ev.tok && isT(null, ev.tok) ? ev.n || 1 : 0;
       return mine && now >= cond.min && now - mine < cond.min ? 1 : 0;
     }
-    case "selfdies": return (ev.type === "dies" || (cond.leaves && ev.type === "leaves")) && ev.ids?.includes(srcId) ? 1 : 0;
+    case "selfdies": return (ev.type === "dies" || (cond.leaves && ev.type === "leaves" && (!cond.toGy || /^(?:Graveyard|Sacrificed)$/.test(ev.dest || "")))) && ev.ids?.includes(srcId) ? 1 : 0;
     case "attack": {
       if (ev.type !== "attacks" || (cond.other && ev.id === srcId)) return 0;
       if (cond.kw && !(ev.kws || []).includes(cond.kw)) return 0;
@@ -1685,6 +1693,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (t.effs?.some(f => f.n?.spellMv)) t = { ...t, effs: t.effs.map(f => f.n?.spellMv ? { ...f, n: manaValue(evx.card?.m || "") } : f) }; // Ovika: X = that spell's mana value
         if (t.onceTurn) { const k = `${s.id}:${ti}`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; }
         if (t.cond.ifGained && p.lifeGained !== ctx.turnNo) continue;
+        if (t.maxSpeed && (p.speed || 0) < 4) continue; // "Max speed — …" works only at speed 4
         if (t.cond.ifGainedN && !(p.lifeGainedN?.t === ctx.turnNo && (p.lifeGainedN.n || 0) >= t.cond.ifGainedN)) continue; // Resplendent Angel, Valkyrie Harbinger: intervening "if"
         if (t.cond.ifDied && env && env.anyDied === false) continue; // Séance Board, Needletooth Pack
         if (t.cond.ifNoCreatures && env && env.anyCreature === true) continue; // Pestilence
@@ -1779,8 +1788,10 @@ export function activatedAbilities(card) {
   if (actCache.has(card.n)) return actCache.get(card.n);
   card = { ...card, o: kwExpand(card.o) };
   const short = card.n.split("#")[0].split(" // ")[0].split(",")[0].toLowerCase();
-  const out = [];
+  const out = []; let curMS = false; const push0 = out.push.bind(out);
+  out.push = (...a) => push0(...a.map(x => curMS ? { ...x, maxSpeed: true } : x)); // "Max speed — {T}: …" needs speed 4
   for (let line of (card.o || "").split("\n")) {
+    curMS = /^Max speed — /i.test(line.trim());
     if (/^Channel\b/i.test(line.trim())) continue; // used from your hand, not the battlefield
     if (/^[^:]*\bdiscard (this card|~)\s*:/i.test(line.trim()) || new RegExp(`^[^:]*\\bdiscard ${card.n.split("#")[0].split(" // ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`, "i").test(line.trim())) continue; // ditto
     line = line.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().replace(/^[^—:{}]{1,60} — /, "");
