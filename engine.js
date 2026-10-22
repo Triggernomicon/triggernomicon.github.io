@@ -2524,9 +2524,19 @@ export function detectCombos(p, lookup, ctx = {}) {
   }
   // Underworld Breach + Grinding Station + a 0-cost artifact: sacrifice it to Station (mill 3), escape it (exile 3), it enters and untaps Station
   { const ub = has("Underworld Breach"), gs = ents.find(x => /^\{T\}, Sacrifice an artifact: Target player mills (?:three|\d+) cards?/im.test(x.o) && /whenever an artifact enters, you may untap this/i.test(x.o));
-    const zero = gs && [...ents.filter(x => x.id !== gs.id), ...Object.values(p.gy || {}).map(c => ({ n: c.n, t: c.t || lookup(c.n)?.t || "" }))].find(x => /\bArtifact\b/.test(x.t || lookup(x.n)?.t || "") && !/\bLand\b/.test(x.t || lookup(x.n)?.t || "") && x.n !== gs.n && manaValue(String(lookup(x.n)?.m ?? "")) === 0 && lookup(x.n)?.m != null);
+    const zero = gs && [...ents.filter(x => x.id !== gs.id), ...Object.values(p.gy || {}).map(c => ({ n: c.n, t: c.t || lookup(c.n)?.t || "" })), ...(ctx.hand || []).map(n => ({ n, t: lookup(n)?.t || "" }))].find(x => /\bArtifact\b/.test(x.t || lookup(x.n)?.t || "") && !/\bLand\b/.test(x.t || lookup(x.n)?.t || "") && x.n !== gs.n && manaValue(String(lookup(x.n)?.m ?? "")) === 0 && lookup(x.n)?.m != null);
     if (ub && gs && zero) out.push({ key: `named:Underworld Breach+${gs.n}+${zero.n}`, name: `Underworld Breach + ${gs.n} + ${zero.n}`, pieces: ["Underworld Breach", gs.n, zero.n], win: false, kind: "info",
       desc: `Tap ${gs.n} and sacrifice ${zero.n} (target player mills 3), escape ${zero.n} for free (exile 3 other graveyard cards); it enters and untaps ${gs.n}. Mill yourself to keep the graveyard stocked: infinite self-mill, storm, artifact enter and leave triggers. Breach is sacrificed at the end step.` }); }
+  // Hullbreaker Horror + two permanents that cost {0} (Ornithopter, Memnite, Mox Opal…): each cast bounces the other
+  { const hh = ents.find(x => /^whenever you cast a spell, choose up to one —/im.test(x.o) && /return target nonland permanent to its owner's hand/i.test(x.o));
+    if (hh && !out.some(c => c.key.startsWith("hull:"))) {
+      const arts = ents.filter(x => /\bArtifact\b/.test(x.t)).length;
+      const free = n => { const c = lookup(n); if (!c || /\bLand\b/.test(c.t || "") || !/\b(Artifact|Creature|Enchantment|Planeswalker)\b/.test(c.t || "")) return false;
+        const m = String(c.m ?? ""); if (c.m != null && manaValue(m) === 0) return true;
+        return /\baffinity for artifacts\b/i.test(c.o || "") && !/\{[WUBRG]\}/.test(m) && manaValue(m) <= arts; };
+      const zs = [...new Set([...ents.filter(x => x.id !== hh.id).map(x => x.n), ...(ctx.hand || [])])].filter(free);
+      if (zs.length >= 2) out.push({ key: `hull0:${zs[0]}+${zs[1]}`, name: `${hh.n} + ${zs[0]} + ${zs[1]}`, pieces: [hh.n, zs[0], zs[1]], win: false, kind: "info",
+        desc: `Cast ${zs[0]} for free: ${hh.n} returns ${zs[1]} to your hand. Cast ${zs[1]}: it returns ${zs[0]}. Repeat: infinite storm count, cast triggers and enter/leave triggers.` }); } }
   // Chatterfang-style token adder ("those tokens plus that many 1/1 Squirrels"): sacrificing a creature that makes a token makes a Squirrel to sacrifice next
   { const sqAdd = pick(/if one or more tokens would be created under your control, those tokens plus that many [^.]*squirrel creature tokens/i)[0];
     const toks = Object.values(p.tokens || {}).filter(t => (t.count || 0) > 0);
@@ -2570,6 +2580,31 @@ export function detectCombos(p, lookup, ctx = {}) {
     const mc = pick(/magecraft — whenever you cast or copy an instant or sorcery spell, each opponent loses (?:1|one) life/i)[0];
     if (cs && mc) out.push({ key: `smog:${cs}+${mc.n}`, name: `${cs} + ${mc.n}`, pieces: [cs, mc.n], win: true, kind: "drainAll",
       desc: `Cast ${cs} targeting yourself. Each time it resolves, discard two (or what you have) and copy it targeting yourself again: every copy is a magecraft trigger, so ${mc.n} drains each opponent forever.` }); }
+  // All Will Be One + something that puts a counter down whenever damage is dealt (War Elemental, The Red Terror, Quest for Pure Flame)
+  { const awbo = pick(/whenever you put one or more counters on a permanent or player, this [a-z]+ deals that much damage to target opponent/i)[0];
+    if (awbo) { const red = /\{R\}/.test(String(lookup(awbo.n)?.m || awbo.e.m || ""));
+      const eng = ents.find(x => x.id !== awbo.id && (/whenever an opponent is dealt damage, put that many \+1\/\+1 counters/i.test(x.o) || /whenever a source you control deals damage to an opponent, you may put a [a-z]+ counter/i.test(x.o) || (red && /whenever a red source you control deals damage to [^,]*, put a \+1\/\+1 counter/i.test(x.o))));
+      if (eng) out.push({ key: `awbo:${awbo.n}+${eng.n}`, name: `${awbo.n} + ${eng.n}`, pieces: [awbo.n, eng.n], win: true, kind: "dmgAll",
+        desc: `Deal any damage to an opponent to start: ${eng.n} gets a counter, so ${awbo.n} deals that much damage to an opponent, which puts another counter on ${eng.n}. Repeat: infinite damage.` }); } }
+  // Scurry Oak + Cathars' Crusade: each Squirrel entering puts a counter on Scurry Oak, which makes another Squirrel
+  { const oakRe = /whenever one or more \+1\/\+1 counters are put on this creature, you may create a [^.]*creature token/i;
+    const oak = pick(oakRe)[0] || (() => { const n = [...(ctx.hand || []), ...(ctx.cast || [])].find(n => /\bCreature\b/.test(lookup(n)?.t || "") && oakRe.test(lookup(n)?.o || "")); return n ? { n } : null; })();
+    const cru = pick(/^whenever a(?:nother)? creature (?:you control )?enters(?: the battlefield)?(?: under your control)?, put a \+1\/\+1 counter on each creature you control/im)[0];
+    if (oak && cru) out.push({ key: `oak:${oak.n}+${cru.n}`, name: `${oak.n} + ${cru.n}`, pieces: [oak.n, cru.n], win: false, kind: "info",
+      desc: `Any creature entering starts it: ${cru.n} puts a counter on ${oak.n}, which makes a token; that token entering puts more counters on everything. Stop whenever you like: as many tokens and +1/+1 counters as you want.` }); }
+  // Kodama of the East Tree + a bounce land + a landfall token maker (Rampaging Baloths)
+  { const ko = pick(/whenever another permanent you control enters, if it wasn't put onto the battlefield with this ability, you may put a permanent card with equal or lesser mana value from your hand onto the battlefield/i)[0];
+    const bounceRe = /when this land enters, return a land you control to its owner's hand/i;
+    const bounce = ko && (ents.find(x => bounceRe.test(x.o))?.n || (ctx.hand || []).find(n => bounceRe.test(lookup(n)?.o || "")));
+    const lf = ko && pick(/landfall — whenever a land you control enters, create [^.]*creature token/i)[0];
+    if (ko && bounce && lf) out.push({ key: `kodama:${ko.n}+${bounce}+${lf.n}`, name: `${ko.n} + ${bounce} + ${lf.n}`, pieces: [ko.n, bounce, lf.n], win: false, kind: "info",
+      desc: `With a land drop left: play ${bounce}, return ${bounce} itself to your hand; ${lf.n} makes a token, and the token entering lets ${ko.n} put ${bounce} back from your hand. Repeat: infinite tokens and landfall triggers.` }); }
+  // Glacial Chasm lock: replay it from the graveyard with an extra land drop (The Gitrog Monster + Mole Man, Icetill Explorer)
+  { const chasmIn = ents.find(x => x.n === "Glacial Chasm") || Object.values(p.gy || {}).find(c => c.n === "Glacial Chasm") || (ctx.hand || []).includes("Glacial Chasm");
+    const fromGy = pick(/^you may play lands from your graveyard/im), extra = pick(/^you may play an additional land on each of your turns/im);
+    if (chasmIn && fromGy.length && extra.length) { const pieces = [...new Set(["Glacial Chasm", fromGy[0].n, extra[0].n])];
+      out.push({ key: `chasm:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: "info",
+        desc: `Play Glacial Chasm (it sacrifices another land), then replay that land from your graveyard. At upkeep, skip the cost, sacrifice Chasm and play it again from your graveyard: all damage to you is prevented forever. Your creatures can't attack while it's out.` }); } }
   NAMED_COMBOS.forEach(c => {
     if (!c.all.every(has)) return;
     if (c.needEquipped && !ents.some(x => x.n === c.needEquipped && x.e.att)) return;
