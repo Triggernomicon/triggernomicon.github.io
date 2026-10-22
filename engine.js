@@ -2704,6 +2704,7 @@ export function detectCombos(p, lookup, ctx = {}) {
       if (c < need.c || n < need.n) return;
       seen.add(r.n);
       const pay = drain && drain.n !== r.n ? drain : null;
+      if (/a Spawn dying/.test(why) && !used.some(u => spawn.some(x => x.n === u))) used.push(spawn[0].n);
       const pieces = [...new Set([r.n, outlet.o.n, ...used, ...(rooftop && cost === "" ? [rooftop.n] : []), ...(/crime/.test(why) ? [crime.n] : []), ...(pay ? [pay.n] : [])])];
       out.push({ key: `recur:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: !!pay, kind: "info",
         desc: `Sacrifice ${r.n} to ${outlet.o.n}, then ${why}${need.n ? ` for ${cost}, paid with the mana the loop makes` : " for free"}. Repeat: infinite death and enters triggers${pay ? `; ${pay.n} drains each time` : ""}.` });
@@ -2716,5 +2717,54 @@ export function detectCombos(p, lookup, ctx = {}) {
     if (c.needZombie && !ents.some(x => x.n !== "Gravecrawler" && /\bZombie\b/.test(x.t))) return;
     out.push({ key: `named:${c.all.join("+")}`, name: c.all.join(" + "), pieces: c.all, win: c.win, kind: c.kind, desc: c.desc, ...(c.tokenOf ? { tokenOf: c.tokenOf } : {}) });
   });
+  if (CSB && ctx.csb !== false) out.push(...csbFor(p, ctx, out));
   return out;
+}
+
+// ----- Combos from Commander Spellbook's data (https://commanderspellbook.com, MIT license) -----
+// The list is built from their bulk file (csb/build_ship.py) and loaded by the app after start-up.
+// Each row: [card indexes…, zone masks…, feature indexes…, number of cards]. Zone bits: 1 battlefield, 2 hand,
+// 4 graveyard, 8 exile, 16 command zone, 32 library (never checked); 64 = must be your commander.
+const csbNorm = n => String(n || "").split(" // ")[0].trim().toLowerCase();
+let CSB = null;
+export function setComboData(data) {
+  if (!data?.combos || !data?.cards) return false;
+  const names = data.cards.map(c => csbNorm(c[0])), by = new Map();
+  data.combos.forEach((row, i) => { const k = row[row.length - 1]; for (let j = 0; j < k; j++) { const n = names[row[j]]; let a = by.get(n); if (!a) by.set(n, a = []); a.push(i); } });
+  CSB = { data, names, by, memo: new Map(), notes: null };
+  return true;
+}
+export function setComboNotes(notes) { if (CSB && notes?.pre) { CSB.notes = notes.pre; CSB.memo.clear(); } }
+export const comboDataInfo = () => CSB ? { combos: CSB.data.combos.length, ts: CSB.data.ts } : null;
+const CSB_WIN = /^(?:win the game|each opponent loses the game|infinite lifeloss|infinite damage to opponents|infinite damage)$/i;
+function csbFor(p, ctx, hand) {
+  const nm = x => csbNorm(x?.n ?? x);
+  const zones = { B: new Set(Object.values(p.bf || {}).filter(e => !e.tok).map(nm)), H: new Set((ctx.hand || []).map(nm)), G: new Set(Object.values(p.gy || {}).map(nm)), E: new Set(Object.values(p.ex || {}).map(nm)), C: new Set() };
+  const cmds = new Set((ctx.cmds || []).map(nm));
+  cmds.forEach(n => { if (!zones.B.has(n) && !zones.G.has(n) && !zones.E.has(n)) zones.C.add(n); });
+  const sig = ["B", "H", "G", "E", "C"].map(z => [...zones[z]].sort().join("|")).join("#") + "#" + [...cmds].sort().join("|") + "#" + hand.map(c => c.key).sort().join("|");
+  const hit = CSB.memo.get(sig); if (hit) return hit;
+  const { data, names } = CSB, cand = new Set();
+  for (const z of Object.values(zones)) for (const n of z) (CSB.by.get(n) || []).forEach(i => cand.add(i));
+  const found = [];
+  for (const i of cand) {
+    const row = data.combos[i], k = row[row.length - 1]; let ok = true;
+    for (let j = 0; j < k && ok; j++) { const n = names[row[j]], m = row[k + j];
+      ok = !!((m & 1 && zones.B.has(n)) || (m & 2 && zones.H.has(n)) || (m & 4 && zones.G.has(n)) || (m & 8 && zones.E.has(n)) || (m & 16 && zones.C.has(n))) && (!(m & 64) || cmds.has(n)); }
+    if (ok) found.push({ i, set: new Set(row.slice(0, k).map(x => names[x])), feats: row.slice(2 * k, row.length - 1).map(f => data.feats[f]) });
+  }
+  // already covered by one of the app's own combo alerts (theirs do more: Loop buttons, conditions)
+  const own = hand.map(c => new Set((c.pieces || String(c.name || "").split(" + ")).map(csbNorm)));
+  const sub = (a, b) => [...a].every(x => b.has(x));
+  let list = found.filter(f => !own.some(o => o.size && sub(o, f.set)));
+  // a bigger version of a smaller combo that's also here, adding nothing new, is left out
+  list = list.filter(f => !list.some(g => g !== f && g.set.size < f.set.size && sub(g.set, f.set) && f.feats.every(x => g.feats.includes(x))));
+  list.sort((a, b) => a.set.size - b.set.size || b.feats.some(x => CSB_WIN.test(x)) - a.feats.some(x => CSB_WIN.test(x)));
+  const res = list.slice(0, 8).map(f => { const row = data.combos[f.i], k = row[row.length - 1], cards = row.slice(0, k).map(x => data.cards[x]);
+    const id = cards.map(c => c[1]).join("-"), note = CSB.notes?.[f.i];
+    return { key: `csb:${id}`, name: cards.map(c => c[0]).join(" + "), pieces: cards.map(c => c[0]), win: f.feats.some(x => /^(?:win the game|each opponent loses the game)$/i.test(x)), kind: "info", csb: id,
+      desc: `${f.feats.join(" · ")}.${note ? ` Needs: ${note}` : ""}`, more: list.length > 8 && f === list[7] ? list.length - 8 : 0 }; });
+  if (CSB.memo.size > 300) CSB.memo.clear();
+  CSB.memo.set(sig, res);
+  return res;
 }
