@@ -2687,7 +2687,10 @@ export function detectCombos(p, lookup, ctx = {}) {
     const persistC = ents.find(x => /\bCreature\b/.test(x.t) && kw(x, "persist") && !/\bHuman\b/.test(x.t));
     const helper = (mik && persistC) ? mik : (mimic && persistC) ? mimic : null;
     if (outlet && helper && persistC) { const pieces = [...new Set([outlet.n, helper.n, persistC.n])];
-      out.push({ key: `persist:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: false, kind: "info",
+      const dmgOut = /^sacrifice (?:a|another) creature: [^\n]*deals? \d+ damage to (?:any target|each opponent|target (?:player|opponent))/im.test(outlet.o);
+      const drainer = ents.find(x => /whenever (?:this creature or )?another creature (?:you control )?dies, (?:each opponent|target player|target opponent) loses/i.test(x.o));
+      if (drainer && !pieces.includes(drainer.n)) pieces.push(drainer.n);
+      out.push({ key: `persist:${pieces.join("+")}`, name: pieces.join(" + "), pieces, win: dmgOut || !!drainer, kind: "info",
         desc: helper === mik ? `Sacrifice ${persistC.n} to ${outlet.n}: persist returns it with a −1/−1 counter; next time undying (from ${mik.n}) returns it with a +1/+1 counter, which cancels the −1/−1. Repeat: infinite death and enter triggers.` : `${persistC.n} comes back with persist's −1/−1 counter and ${mimic.n}'s extra +1/+1 counter, which cancel out (if it's the chosen type). Sacrifice it to ${outlet.n} again: infinite death and enter triggers.` }); }
     // Yawgmoth: pay 1 life and sacrifice to put a −1/−1 counter on an undying creature (clearing its +1/+1), with a death payoff paying the life back
     const yaw = pick(/^pay 1 life, sacrifice another creature: put a -1\/-1 counter on up to one target creature and draw a card/im)[0];
@@ -2843,7 +2846,7 @@ function csbFor(p, ctx, hand) {
   list.sort((a, b) => a.set.size - b.set.size || b.feats.some(x => CSB_WIN.test(x)) - a.feats.some(x => CSB_WIN.test(x)));
   const res = list.slice(0, 8).map(f => { const row = data.combos[f.i], k = row[row.length - 1], cards = row.slice(0, k).map(x => data.cards[x]);
     const id = cards.map(c => c[1]).join("-"), note = CSB.notes?.[f.i];
-    return { key: `csb:${id}`, name: cards.map(c => c[0]).join(" + "), pieces: cards.map(c => c[0]), win: f.feats.some(x => /^(?:win the game|each opponent loses the game)$/i.test(x)), kind: "info", csb: id,
+    return { key: `csb:${id}`, name: cards.map(c => c[0]).join(" + "), pieces: cards.map(c => c[0]), win: f.feats.some(x => CSB_WIN.test(x)), kind: "info", csb: id,
       desc: `${f.feats.join(" · ")}.${note ? ` Needs: ${note}` : ""}`, wait: f.wait.length ? f.wait : null, more: list.length > 8 && f === list[7] ? list.length - 8 : 0 }; });
   if (CSB.memo.size > 300) CSB.memo.clear();
   CSB.memo.set(sig, res);
