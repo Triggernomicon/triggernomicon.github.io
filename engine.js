@@ -2121,7 +2121,7 @@ export function hitTriggers(card) {
   const short = String(card?.n || "").split(" // ")[0].split(",")[0].toLowerCase();
   // ability words ("Throw — Whenever …") and Vehicles/artifact creatures ("Whenever this Vehicle deals combat damage …") count too
   // the card may call itself by its first name ("Legolas" on Legolas Greenleaf), and "a player or planeswalker / battle" and "an opponent" hit too
-  return String(card?.o || "").split("\n").map(l => l.trim().replace(/^[^—:{}]{1,60} — /, "").match(/^(?:whenever|when) ([^,]+?) deals combat damage to (?:a player|an opponent)(?: or (?:a )?(?:planeswalker|battle))?, (.+)$/i)).filter(m => { if (!m) return false; const who = m[1].toLowerCase(); return /^this (?:creature|vehicle|artifact|land|enchantment|permanent)(?: or equipped creature)?$/.test(who) || who.startsWith(short) || (who.length >= 3 && short.startsWith(who)); }).map(m => m[2]);
+  return String(kwExpand(card?.o || "")).split("\n").map(l => l.trim().replace(/^[^—:{}]{1,60} — /, "").match(/^(?:whenever|when) ([^,]+?) deals combat damage to (?:a player|an opponent)(?: or (?:a )?(?:planeswalker|battle))?, (.+)$/i)).filter(m => { if (!m) return false; const who = m[1].toLowerCase(); return /^this (?:creature|vehicle|artifact|land|enchantment|permanent)(?: or equipped creature)?$/.test(who) || who.startsWith(short) || (who.length >= 3 && short.startsWith(who)); }).map(m => m[2]);
 }
 // Firebending N (own keyword)
 export function firebendingOf(card) { return (String(card?.o || "").match(/^Firebending (\d+)/m) || [])[1] ? Number(String(card.o).match(/^Firebending (\d+)/m)[1]) : 0; }
