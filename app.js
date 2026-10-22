@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261022d";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022d";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022d";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes } from "./engine.js?v=20261022d";
+import { firebaseConfig } from "./config.js?v=20261022e";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022e";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022e";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos } from "./engine.js?v=20261022e";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,12 +757,12 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.22d";
+const APP_VERSION = "2026.10.22e";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022d" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022e" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
-const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>).`;
+const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
 const COMBO_DATA_V = "20261022b";
 const comboLoad = (typeof window !== "undefined" && window.location?.protocol?.startsWith("http") ? fetch(`./combos.json?v=${COMBO_DATA_V}`).then(r => r.ok ? r.json() : null).then(d => setComboData(d)).catch(() => false) : Promise.resolve(false));
@@ -2253,6 +2253,7 @@ function startController(code, pid) {
     if (done && Object.values(me.bf || {}).some(e => /whenever you complete a dungeon/i.test(e.o || lookupCard(e.n)?.o || ""))) Object.values(me.bf || {}).forEach(e => { const m = String(e.o || lookupCard(e.n)?.o || "").match(/whenever you complete a dungeon, ([^\n]+)/i); if (m) reminders.push(normalizeRem({ id: newId(), src: dispName(e), text: m[1][0].toUpperCase() + m[1].slice(1), times: 1 })); });
   }
   function normalizeRem(r) {
+    if (r.text) r.text = r.text.replace(/(^|[.:] )You adds\b/g, "$1Add"); // "its controller adds" filled in as you (Heartbeat of Spring, Dictate of Karametra)
     // Work out X where the app knows it (Sunbird's Invocation, Pyreswipe Hawk); Thickest in the Thicket gets a picker that counts the target's power
     const fillX = (t, n) => t.replace(/,?\s*where X is [^.]+/i, "").replace(/\bX\b/g, String(n));
     if (r.xVal != null) { if (/\bX\b/.test(r.text || "")) { r.text = fillX(r.text, r.xVal); r.note ||= `X = ${r.xVal} (${r.xWhy})`; } delete r.xVal; }
@@ -3284,7 +3285,7 @@ function startController(code, pid) {
     }
     if (tapping && !/\bLand\b/.test(e.t || "") && /\{T\}[^:\n]*: Add\b/.test(eo)) { const kn = Object.values(me.bf || {}).filter(x => /whenever you tap a nonland permanent for mana, add one mana of any type that permanent produced/i.test(x.o || lookupCard(x.n)?.o || "")); if (kn.length) toast(`⚡ ${dispName(e)}: ${kn.map(x => `${dispName(x)} +1 of a type it made`).join(" · ")}`); }
     if (!/\bLand\b/.test(e.t || "")) return;
-    if (tapping) { const us = Object.values(me.bf || {}).filter(x => x.att === id && /whenever enchanted (?:land|forest) is tapped for mana, its controller adds an additional/i.test(x.o || lookupCard(x.n)?.o || "")); if (us.length) toast(`⚡ ${dispName(e)}: ${us.map(x => `${dispName(x)} +1 ${x.color || "chosen color"}`).join(" · ")}`); }
+    if (tapping) { const us = Object.values(me.bf || {}).filter(x => x.att === id && /whenever enchanted (?:land|forest) is tapped for mana, its controller adds an additional/i.test(x.o || lookupCard(x.n)?.o || "")); if (us.length) { const fixed = us.map(x => [x, (String(x.o || lookupCard(x.n)?.o || "").match(/adds an additional ((?:\{[WUBRGC]\})+)/i) || [])[1]]); fixed.filter(([, sy]) => sy).forEach(([x, sy]) => { poolAdd(sy, dispName(x)); logTo(code, `⚡ ${dispName(x)}: ${me.name} added an additional ${sy}`); }); const rest = fixed.filter(([, sy]) => !sy).map(([x]) => x); if (rest.length) toast(`⚡ ${dispName(e)}: ${rest.map(x => `${dispName(x)} +1 ${x.color || "chosen color"}`).join(" · ")}`); } }
     if (tapping) extraManaNote(e);
     const lt = reminders.find(r => r.landTap);
     if (!tapping) { if (lt) { lt.landTap.ids = lt.landTap.ids.filter(x => x !== id); if (!lt.landTap.ids.length) reminders = reminders.filter(r => r !== lt); render(); } return; }
@@ -3990,7 +3991,7 @@ function startController(code, pid) {
   // When I cast: use up a rider that applies to this spell
   // ----- Infinite combos on my board -----
   let combosSeen = new Set();
-  comboLoad.then(ok => { if (ok) try { render(); } catch {} });
+  comboLoad.then(ok => { if (ok) { try { render(); } catch {} try { renderDeck(); } catch {} } });
   function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { cmds: deck?.cmds || [], sick: id => { const e = me.bf?.[id]; return !!e && isSick({ ...e, o: e.o || lookupCard(e.n)?.o, t: e.t || lookupCard(e.n)?.t }, meOwner(), id); }, hand: dig?.on ? [...dig.hand] : [], lib: dig?.on ? [...dig.lib] : null, cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
   function announceCombos() {
     const list = myCombos(), keys = new Set(list.map(c => c.key));
@@ -6226,7 +6227,16 @@ function startController(code, pid) {
         : `<p class="muted">No recognized triggers in this deck yet.</p>`}
       <p class="muted">"Auto" resolves on its own. "Reminder" pops up so you can apply or handle it yourself.</p>
     </section>`;
-    deckInfo.innerHTML = libHtml + digHtml + abilitiesHtml + `
+    const dc = deckCombos(deck.cards.map(c => c.n), deck.cmds || []);
+    const cLink = c => `<a href="https://commanderspellbook.com/combo/${esc(c.id)}/" target="_blank" rel="noopener">${esc(c.pieces.join(" + "))}</a>`;
+    const combosHtml = !dc ? "" : `
+    <section class="card">
+      <h3>Combos in this deck (${dc.full.length})</h3>
+      ${dc.full.length ? `<details><summary class="muted">Show combos</summary>${dc.full.slice(0, 60).map(c => `<div class="ab-row">${cLink(c)} <span class="muted">· ${esc(c.feats.slice(0, 3).join(", "))}</span></div>`).join("")}${dc.full.length > 60 ? `<p class="muted">…and ${dc.full.length - 60} more.</p>` : ""}</details>` : `<p class="muted">No known combos with every piece in this list.</p>`}
+      ${dc.near.length ? `<details><summary class="muted">One card away (${dc.near.length} card${dc.near.length === 1 ? "" : "s"} would add a combo)</summary>${dc.near.slice(0, 25).map(x => `<div class="ab-row"><b>${esc(x.card)}</b> <span class="muted">→ ${x.combos.length} combo${x.combos.length === 1 ? "" : "s"}, e.g.</span> ${cLink(x.combos[0])}</div>`).join("")}</details>` : ""}
+      <p class="muted">From <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>'s combo list (combos of up to four cards).</p>
+    </section>`;
+    deckInfo.innerHTML = libHtml + digHtml + abilitiesHtml + combosHtml + `
     <section class="card">
       <h3>${esc(deck.name || "Untitled")}</h3>
       <p><b>${total}</b> cards · imported ${new Date(deck.at).toLocaleDateString()}</p>
@@ -6460,6 +6470,7 @@ function startController(code, pid) {
               : r.untapOne ? `<button class="btn small primary" data-a="untap-one" data-id="${r.id}">Untap it</button>`
               : r.copyCreature ? (() => { const opts = attachTargets("creature"); return opts.length ? `<select class="fetch-pick" id="cc-${r.id}">${opts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" data-a="copycre-go" data-id="${r.id}">Copy it</button>` : `<span class="mini">No creatures.</span>`; })()
               : r.landTap ? landTapBox(r)
+              : r.mana && r.atStep != null && room?.turn === pid && (room?.step?.i ?? 0) < r.atStep ? `<span class="mini">🔋 Add it when you reach ${r.atStep === 1 ? "your draw step" : "Main 1"} (mana empties between steps)</span>`
               : r.mana ? `<button class="btn small primary" data-a="mana-pool" data-id="${r.id}">🔋 Into my mana</button>`
               : r.anyColor ? `${(r.anyN || 1) > 1 ? `<span class="mini">${r.anyOne ? `${r.anyN} of one color:` : `${r.anyN - (r.anyGot || 0)} left to pick:`}</span>` : ""}${MCOL.slice(0, 5).filter(c => !r.colors || r.colors.includes(c)).map(c => `<button class="btn small" data-a="any-color" data-id="${r.id}" data-c="${c}">${manaHtml(`{${c}}`)}</button>`).join("")}`
               : r.sacCost ? sacBox(r)
@@ -10272,7 +10283,7 @@ function startController(code, pid) {
     const ctx = { logs: [], remind: [], drain: 0, who: me.name };
     runEvents(test, list, ctx, { enabled: true, lookup: lookupCard, env: boardEnv(), turnNo: room?.turnNo || 0 });
     if (ctx.logs.length || ctx.drain) act(list);
-    else if (ctx.remind.length) { ctx.remind.forEach(r => { const x = normalizeRem({ ...r, id: newId() }); if (when) { if (x.text) x.text = `${when}: ${x.text[0].toLowerCase()}${x.text.slice(1)}`; else x.note = `${when}.`; } reminders.push(x); }); render(); }
+    else if (ctx.remind.length) { ctx.remind.forEach(r => { const x = normalizeRem({ ...r, id: newId() }); if (when) { if (x.text) x.text = `${when}: ${x.text[0].toLowerCase()}${x.text.slice(1)}`; else x.note = `${when}.`; if (x.mana && list[0]?.mine) x.atStep = list[0].phase === "draw" ? 1 : list[0].phase === "main1" ? 2 : null; } reminders.push(x); }); render(); }
   }
   const doneMsgs = new Set();
   let seenCasts = null; // casts already processed on this phone

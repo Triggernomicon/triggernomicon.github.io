@@ -70,7 +70,9 @@ const withAdds = t => typeAdds.reduce((s, a) => new RegExp(`\\b${a.to}\\b`, "i")
 // Changeling (Taurean Mauler, Mirror Entity…): a creature with every creature type
 const NOT_CREATURE_TYPE = new Set("artifact battle creature enchantment instant land planeswalker sorcery kindred tribal legendary basic snow world token nontoken permanent spell card other equipment aura vehicle saga forest island swamp mountain plains desert gate cave sphere food treasure clue blood map powerstone gold shrine curse class case role room background cartouche rune attraction lesson trap adventure arcane siege".split(" "));
 export const isChangeling = e => /\bCreature\b/.test(e?.t || "") && (/^Changeling\b|\bis every creature type\b|\bhas all creature types\b/im.test(e?.o || "") || /\bchangeling\b/i.test(e?.desc || ""));
-export const changelingHas = (e, w) => { const x = singular(String(w || "").toLowerCase()); return !!x && !NOT_CREATURE_TYPE.has(x) && !COLOR_LETTER[x] && isChangeling(e); };
+// Every creature type (MTGJSON CardTypes, MIT license, 2026-10-22): a changeling is these, not "Food" or "Town"
+export const CREATURE_TYPES = new Set("Advisor|Aenar|Aetherborn|Alien|Ally|Andorian|Android|Angel|Antelope|Ape|Archer|Archon|Armadillo|Army|Artificer|Assassin|Assembly-Worker|Astartes|Atog|Aurochs|Automaton|Avatar|Azra|Badger|Balloon|Barbarian|Bard|Basilisk|Bat|Bear|Beast|Beaver|Beeble|Beholder|Berserker|Bird|Bison|Blinkmoth|Boar|Borg|Brainiac|Bringer|Brushwagg|C'tan|Caitian|Camarid|Camel|Capybara|Caribou|Carrier|Cat|Centaur|Chicken|Child|Chimera|Citizen|Cleric|Clown|Cockatrice|Construct|Coward|Coyote|Crab|Crocodile|Custodes|Cyberman|Cyclops|Dalek|Dauthi|Demigod|Demon|Denobulan|Deserter|Detective|Devil|Dinosaur|Djinn|Doctor|Dog|Dragon|Drake|Dreadnought|Drix|Drone|Druid|Dryad|Dwarf|Echidna|Efreet|Egg|El-Aurian|Elder|Eldrazi|Elemental|Elephant|Elf|Elk|Employee|Eternal|Eye|Faerie|Ferengi|Ferret|Fish|Flagbearer|Fox|Fractal|Frog|Fungus|Gamer|Gamma|Gargoyle|Germ|Giant|Giraffe|Gith|Glimmer|Gnoll|Gnome|Goat|Goblin|God|Golem|Gorgon|Gorn|Graveborn|Gremlin|Griffin|Guest|Hag|Halfling|Hamster|Harpy|Head|Hedgehog|Hellion|Hero|Hippo|Hippogriff|Homarid|Homunculus|Horror|Horse|Human|Hydra|Hyena|Illusion|Imp|Incarnation|Inhuman|Inkling|Inquisitor|Insect|Jackal|Jellyfish|Juggernaut|Kangaroo|Kavu|Kelpien|Kirin|Kithkin|Klingon|Knight|Kobold|Kor|Kraken|Kree|Kwejian|Lamia|Lammasu|Lanthanite|Leech|Lemur|Leviathan|Lhurgoyf|Licid|Lizard|Llama|Lobster|Manticore|Masticore|Medusan|Mercenary|Merfolk|Metathran|Minion|Minotaur|Missing|Mite|Mole|Monger|Mongoose|Monk|Monkey|Moogle|Moonfolk|Mount|Mouse|Mutant|Myr|Mystic|Naga|Nautilus|Necron|Nephilim|Nightmare|Nightstalker|Ninja|Noble|Noggle|Nomad|Nymph|Octopus|Officer|Ogre|Ooze|Orb|Orc|Orgg|Orion|Otter|Ouphe|Ox|Oyster|Pangolin|Peasant|Pegasus|Pentavite|Performer|Pest|Phelddagrif|Phoenix|Phyrexian|Pilot|Pincher|Pirate|Plant|Platypus|Porcupine|Possum|Praetor|Primarch|Prism|Processor|Q|Qu|Rabbit|Raccoon|Ranger|Rat|Rebel|Reflection|Reveler|Rhino|Rigger|Robot|Rogue|Rukh|Sable|Salamander|Samurai|Sand|Saproling|Satyr|Scarecrow|Scientist|Scion|Scorpion|Scout|Sculpture|Seal|Serf|Serpent|Servo|Shade|Shaman|Shapeshifter|Shark|Sheep|Shi'ar|Siren|Skeleton|Skrull|Skunk|Slith|Sliver|Sloth|Slug|Snail|Snake|Soldier|Soltari|Sorcerer|Spawn|Specter|Spellshaper|Sphinx|Spider|Spike|Spirit|Splinter|Sponge|Spy|Squid|Squirrel|Starfish|Surrakar|Survivor|Symbiote|Synth|Talosian|Teddy|Tellarite|Tentacle|Tetravite|Thalakos|Tholian|Thopter|Thrull|Tiefling|Time Lord|Tosk|Toy|Treefolk|Tribble|Trill|Trilobite|Triskelavite|Troll|Turtle|Tyranid|Unicorn|Urzan|Utrom|Vampire|Varmint|Vedalken|Villain|Volver|Vorta|Vulcan|Wall|Walrus|Warlock|Warrior|Weasel|Weird|Werewolf|Whale|Wizard|Wolf|Wolverine|Wombat|Worm|Wraith|Wurm|Xindi|Yeti|Zombie|Zubera".toLowerCase().split("|"));
+export const changelingHas = (e, w) => { const raw = String(w || "").toLowerCase(), x = singular(raw); return !!x && (CREATURE_TYPES.has(x) || CREATURE_TYPES.has(raw) || CREATURE_TYPES.has(raw.replace(/es$/, ""))) && !NOT_CREATURE_TYPE.has(x) && !COLOR_LETTER[x] && isChangeling(e); };
 const reEsc = x => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export function permanentMatches(e, f) {
   const t = withAdds(e.t || "");
@@ -329,7 +331,10 @@ function parseEffects0(text, cardName = "") {
   if (/\bfor each token you control, create a token that's a copy of that permanent\b/i.test(text)) effs.push({ k: "copyAllTokens" });
   { const ss = text.match(/^create (?:a|an|one) ([^.]+?) creature token\. if you control (\w+) or more lands, create a token that's a copy of (?:this creature|it) instead\.?$/i); // Scute Swarm
     if (ss) return [{ k: "scute", lands: num(ss[2]) || Number(ss[2]), name: capName(ss[1]) || "Insect", desc: ss[1] }]; }
-  if (/^double the number of \+1\/\+1 counters on (?:it|this creature|[A-Z][^.]*?)\.?$/i.test(text.trim())) return [{ k: "dblCtrSelf", key: "p1p1" }]; // Mossborn Hydra
+  { const dm = text.trim().match(/^double the number of \+1\/\+1 counters on (.+?)\.?$/i), on = dm?.[1] || "";
+    if (dm && (/^(?:it|this creature|him|her)$/i.test(on) || (/^[A-Z]/.test(on) && !/^(?:each|all|target|another|up to|that)\b/i.test(on)))) return [{ k: "dblCtrSelf", key: "p1p1" }]; // Mossborn Hydra
+    if (dm && /^each (.+?) you control$/i.test(on)) return [{ k: "dblCtrAll", key: "p1p1", filter: parseTargetFilter(on.replace(/^each /i, "").replace(/ you control$/i, "")) }]; // Kalonian Hydra, Bristly Bill
+    if (/double the number of/i.test(text)) return []; } // other doubling (a target, "each kind of counter"): left to the player, so a partial result never goes through on its own
   { const sc = text.match(/\bcreate (a|one|two|three) tokens? that(?:'s| is| are) (?:a )?cop(?:y|ies) of (?:it|them|this creature)\b(, except (?:it|they|the tokens?) (?:isn't|aren't) legendary)?/i); if (sc && !/target/i.test(text.slice(0, sc.index + sc[0].length))) effs.push({ k: "selfCopies", n: num(sc[1]) || 1, nonleg: !!sc[2] }); }
   // Until end of turn: Overrun / Craterhoof ("creatures you control gain trample and get +X/+X until end of turn, where X is …"), Golgari Charm ("all creatures get -1/-1")
   // Overwhelming Stampede puts "until end of turn" first: "Until end of turn, creatures you control gain trample and get +X/+X, where X is …"
@@ -781,6 +786,13 @@ export function kwExpand(o) {
     .replace(/^Evoke[—-][^\n]*|^Evoke (?:\{[^}]+\})+[^\n]*/m, m => `${m}\nWhen this creature enters, if its evoke cost was paid, its controller sacrifices it.`)
     .replace(/^Fading (\d+)[^\n]*/m, (_, n) => `This permanent enters with ${kwNum(n)} fade counters on it.\nAt the beginning of your upkeep, remove a fade counter from this permanent. If you can't, sacrifice it.`)
     .replace(/^Ravenous\b[^\n]*/m, "This creature enters with X +1/+1 counters on it.\nWhen this creature enters, if X is 5 or more, draw a card.").replace(/^Modular (\d+)[^\n]*/m, "This creature enters with $1 +1/+1 counters on it.\nWhen this creature dies, you may put its +1/+1 counters on target artifact creature.")
+    // keywords whose whole rule is a trigger in their reminder text (Afterlife, Battle cry, Mobilize, Increment, Hideaway, Partner with): use the reminder as the trigger
+    .replace(/^([^\n(]*\b(?:Afterlife|Battle cry|Mobilize|Increment|Hideaway|Partner with)\b[^\n(]*)\(((?:When|Whenever|At the beginning)[^)]*)\)[^\n]*/gim, (m, kw, rem) => `${m}\n${rem.replace(/^When this permanent is put into a graveyard from the battlefield,/i, "When this creature dies,")}`)
+    // Sunburst and Devour: counters on entering that depend on how it was cast or what was sacrificed: ask on entering
+    .replace(/^Sunburst\b[^\n]*/m, m => `${m}\nWhen this permanent enters, it gets one ${/creature enters/i.test(m) ? "+1/+1" : "charge"} counter for each color of mana spent to cast it. Add them by hand on the card.`)
+    .replace(/^Devour (land |artifact )?(\d+)[^\n]*/m, (m, what, n) => `${m}\nWhen this creature enters, devour: you may sacrifice any number of ${(what || "creature ").trim()}s; it gets ${n === "1" ? "one +1/+1 counter" : `${kwNum(n)} +1/+1 counters`} for each. Move them to the graveyard and add the counters by hand on the card.`)
+    // "When X enters and at the beginning of your upkeep, …" (Minsc & Boo): two triggers with one effect
+    .replace(/^(When [^,\n]*? enters) and (at the beginning of [^,\n]+), ([^\n]+)/m, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
     .replace(/^Training\b[^\n]*/m, "Whenever this creature attacks with another creature with greater power, put a +1/+1 counter on this creature.")
     .replace(/^Outlast ((?:\{[^}]+\})+)[^\n]*/m, "$1, {T}: Put a +1/+1 counter on this creature. Activate only as a sorcery.")
     .replace(/^Mentor\b[^\n]*/m, "Whenever this creature attacks, put a +1/+1 counter on target attacking creature with lesser power.")
@@ -819,7 +831,7 @@ export function parseAbilities(card) {
     m = line.match(/^if you would create an? ([a-z]+) token, instead create an? \1 token and an? ([a-z]+) token/i);
     if (m) { out.repl.push({ kind: "plusOn", on: capName(m[1]), name: capName(m[2]) }); continue; }
     if (/^if one or more \+1\/\+1 counters would be put on an? (creature|permanent|artifact or creature) you control, that many plus one/.test(low)) { out.repl.push({ kind: "cplus", n: 1, p1p1: true, ...(/(permanent|artifact or creature) you control/.test(low) ? { perm: true } : {}) }); continue; }
-    if (/(counters? would be put on (?:a|an) (?:creature|permanent|artifact or creature)(?:, spacecraft, or planet)?(?:[^,]* you control)?|if an effect would put one or more counters on a permanent you control)[^.]*twice that many/.test(low)) {
+    if (/(counters? would be put on (?:a|an) (?:creature|permanent|artifact or creature)(?:, spacecraft, or planet)?(?:[^,]* you control)?|if an effect would put one or more counters on a permanent you control|^if you would put one or more counters on a permanent or player)[^.]*twice that many/.test(low)) {
       out.repl.push({ kind: "cdouble", p1p1: /\+1\/\+1 counters would/.test(low) }); continue;
     }
     if (/power and toughness are each equal to the number of cards in your hand/i.test(line)) out.cda = "hand";
@@ -1461,6 +1473,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
           for (let i = 0; i < Math.max(1, times); i++) { if (lands >= f.lands) ctx.remind.push({ src, srcId, text: "", selfCopies: { n: 1, id: srcId }, times: 1 }); else queue.push({ type: "create", name: f.name, desc: f.desc, n: 1, src }); }
           if (lands >= f.lands) ctx.logs.push(`⚙ ${src}: ${lands} lands — copies itself`); }
         if (f.k === "dblCtrSelf" && p.bf?.[srcId]) { const e = p.bf[srcId]; for (let i = 0; i < Math.max(1, times); i++) { const cur = e.c?.[f.key] || 0; if (!cur) break; const add = counterAmount(cur, f.key, e); e.c[f.key] = cur + add; } ctx.logs.push(`⚙ ${src}: doubled its +1/+1 counters → ${e.c?.[f.key] || 0}`); }
+        if (f.k === "dblCtrAll") { let n = 0; Object.values(p.bf || {}).forEach(e => { if (!/\bCreature\b/.test(e.t || "") || (f.filter && !permanentMatches(e, f.filter))) return; for (let i = 0; i < Math.max(1, times); i++) { const cur = e.c?.[f.key] || 0; if (!cur) break; e.c[f.key] = cur + counterAmount(cur, f.key, e); n++; } }); ctx.logs.push(`⚙ ${src}: doubled the +1/+1 counters on ${n} creature${n === 1 ? "" : "s"}`); }
         if (f.k === "selfCopies") { const eid = ctx.curEv?.type === "enters" && ctx.curEv.id !== srcId ? ctx.curEv.id : srcId; ctx.remind.push({ src, srcId, text: "", selfCopies: { n: f.n * Math.max(1, times), nonleg: f.nonleg, id: eid }, times: 1 }); }
         if (f.k === "tokCopy") ctx.remind.push({ src, srcId, text: f.n != null && f.n !== 1 ? `Create ${f.n} tokens that are copies of target token you control.` : `Create a token that's a copy of target token you control.${f.twoIf ? ` (A ${f.twoIf}: two copies.)` : ""}`, tokCopy: true, ...(f.n != null ? { copyN: f.n } : {}), ...(f.twoIf ? { twoIf: f.twoIf } : {}), times: 1 });
         if (f.k === "drainCount") {
@@ -2735,6 +2748,25 @@ export function setComboData(data) {
   return true;
 }
 export function setComboNotes(notes) { if (CSB && notes?.pre) { CSB.notes = notes.pre; CSB.memo.clear(); } }
+// Combos in a decklist: every piece in the deck (and must-be-commander pieces are its commander), plus the ones a single card away
+export function deckCombos(names, cmds = []) {
+  if (!CSB) return null;
+  const have = new Set(names.map(csbNorm)), cm = new Set(cmds.map(csbNorm)), full = [], near = new Map(), seen = new Set();
+  for (const n of have) for (const i of CSB.by.get(n) || []) {
+    if (seen.has(i)) continue; seen.add(i);
+    const row = CSB.data.combos[i], k = row[row.length - 1]; let missing = [];
+    for (let j = 0; j < k; j++) { const nm = CSB.names[row[j]], m = row[k + j]; if (!have.has(nm) || (m & 64 && !cm.has(nm))) missing.push(CSB.data.cards[row[j]][0]); }
+    const cards = row.slice(0, k).map(x => CSB.data.cards[x]), feats = row.slice(2 * k, row.length - 1).map(f => CSB.data.feats[f]);
+    const c = { id: cards.map(x => x[1]).join("-"), pieces: cards.map(x => x[0]), feats, missing };
+    if (!missing.length) full.push(c);
+    else if (missing.length === 1 && k >= 2) { const m = missing[0]; if (!near.has(m)) near.set(m, []); near.get(m).push(c); }
+  }
+  // keep the smallest version of each combo
+  const sub = (a, b) => a.every(x => b.includes(x));
+  const fullMin = full.filter(f => !full.some(g => g !== f && g.pieces.length < f.pieces.length && sub(g.pieces, f.pieces) && f.feats.every(x => g.feats.includes(x)))).sort((a, b) => a.pieces.length - b.pieces.length);
+  const nearList = [...near.entries()].map(([card, list]) => ({ card, combos: list.sort((a, b) => a.pieces.length - b.pieces.length) })).sort((a, b) => b.combos.length - a.combos.length);
+  return { full: fullMin, near: nearList };
+}
 export const comboDataInfo = () => CSB ? { combos: CSB.data.combos.length, ts: CSB.data.ts } : null;
 // A piece's state from Spellbook ("without summoning sickness", "with two or more charge counters on it"…), checked
 // against what the app tracks. Returns null when the board says it can't work yet (counters, level, chosen type),
