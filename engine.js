@@ -2736,13 +2736,47 @@ export function setComboData(data) {
 }
 export function setComboNotes(notes) { if (CSB && notes?.pre) { CSB.notes = notes.pre; CSB.memo.clear(); } }
 export const comboDataInfo = () => CSB ? { combos: CSB.data.combos.length, ts: CSB.data.ts } : null;
+// A piece's state from Spellbook ("without summoning sickness", "with two or more charge counters on it"…), checked
+// against what the app tracks. Returns null when the board says it can't work yet (counters, level, chosen type),
+// or a list of things still to check (summoning sickness, tapped, attached, paired, exiled with, anything else).
+function csbState(code, name, n, zones, bfE, p, ctx) {
+  const zone = zones.B.has(n) && /(?:^|\|)B=/.test(code) ? "B" : zones.E.has(n) && /(?:^|\|)E=/.test(code) ? "E" : zones.G.has(n) && /(?:^|\|)G=/.test(code) ? "G" : null;
+  if (!zone) return [];
+  const clauses = (code.split("|").find(x => x.startsWith(zone + "=")) || "").slice(2);
+  if (!clauses) return [];
+  if (clauses.startsWith("?")) return [`${name} ${clauses.slice(1).replace(/~/g, name)}`];
+  const cands = zone === "B" ? bfE.filter(([, e]) => csbNorm(e.n) === n) : zone === "E" ? Object.entries(p.ex || {}).filter(([, e]) => csbNorm(e.n) === n) : Object.entries(p.gy || {}).filter(([, e]) => csbNorm(e.n) === n);
+  const hostOf = id => p.bf?.[id]?.n || "";
+  const cnt = (e, lab) => { const k = counterKey(lab), l = String(lab).toLowerCase(); return Number(e?.c?.[k] ?? e?.c?.[l] ?? e?.c?.["x_" + l] ?? (l === "loyalty" ? e?.loy : 0) ?? 0) || 0; };
+  const tests = clauses.split(";").map(cl => { const [t, ...a] = cl.split(":"); return { t, a: a.join(":") }; });
+  let best = null;
+  for (const [id, e] of (cands.length ? cands : [[null, null]])) {
+    let hard = true; const soft = [];
+    for (const { t, a } of tests) {
+      if (t === "c") { const [lab, op, v] = a.split(":"), x = cnt(e, lab), want = Number(v); if (!(op === ">=" ? x >= want : op === "<=" ? x <= want : op === "<" ? x < want : x === want)) hard = false; }
+      else if (t === "lvl") { if (Math.max(Number(e?.lvl) || 1, cnt(e, "level")) < Number(a)) hard = false; }
+      else if (t === "ch") { if (e?.ctype) { if (String(e.ctype).toLowerCase() !== a.toLowerCase()) hard = false; } else soft.push(`"${a}" chosen for ${name}`); }
+      else if (t === "ns") { if (id && ctx.sick?.(id)) soft.push(`${name} to lose summoning sickness (next turn)`); }
+      else if (t === "tap") { if (!e?.tap) soft.push(`${name} tapped`); }
+      else if (t === "untap") { if (e?.tap) soft.push(`${name} untapped`); }
+      else if (t === "att") { if (!e?.att || (a && csbNorm(hostOf(e.att)) !== csbNorm(a))) soft.push(`${name} attached to ${a || "a creature"}`); }
+      else if (t === "pair") { if (!e?.pair || (a && csbNorm(hostOf(e.pair)) !== csbNorm(a))) soft.push(`${name} paired with ${a || "a creature"}`); }
+      else if (t === "exby") { if (!bfE.some(([, h]) => csbNorm(h.n) === csbNorm(a) && (h.imprints || String(h.imprint || "").split(", ")).some(x => csbNorm(x) === n))) soft.push(`${name} exiled with ${a}`); }
+    }
+    if (hard && (!best || soft.length < best.length)) best = soft;
+  }
+  return best;
+}
 const CSB_WIN = /^(?:win the game|each opponent loses the game|infinite lifeloss|infinite damage to opponents|infinite damage)$/i;
 function csbFor(p, ctx, hand) {
   const nm = x => csbNorm(x?.n ?? x);
-  const zones = { B: new Set(Object.values(p.bf || {}).filter(e => !e.tok).map(nm)), H: new Set((ctx.hand || []).map(nm)), G: new Set(Object.values(p.gy || {}).map(nm)), E: new Set(Object.values(p.ex || {}).map(nm)), C: new Set() };
+  const bfE = Object.entries(p.bf || {}).filter(([, e]) => !e.tok);
+  const imprinted = bfE.flatMap(([, e]) => e.imprints || (e.imprint ? String(e.imprint).split(", ") : []));
+  const zones = { B: new Set(bfE.map(([, e]) => nm(e))), H: new Set((ctx.hand || []).map(nm)), G: new Set(Object.values(p.gy || {}).map(nm)), E: new Set([...Object.values(p.ex || {}).map(nm), ...imprinted.map(nm)]), C: new Set() };
   const cmds = new Set((ctx.cmds || []).map(nm));
   cmds.forEach(n => { if (!zones.B.has(n) && !zones.G.has(n) && !zones.E.has(n)) zones.C.add(n); });
-  const sig = ["B", "H", "G", "E", "C"].map(z => [...zones[z]].sort().join("|")).join("#") + "#" + [...cmds].sort().join("|") + "#" + hand.map(c => c.key).sort().join("|");
+  const sig = ["B", "H", "G", "E", "C"].map(z => [...zones[z]].sort().join("|")).join("#") + "#" + [...cmds].sort().join("|") + "#" + hand.map(c => c.key).sort().join("|")
+    + "#" + bfE.filter(([, e]) => CSB.by.has(nm(e))).map(([id, e]) => `${nm(e)}:${JSON.stringify([e.c || 0, e.lvl || 0, e.ctype || 0, e.att ? p.bf?.[e.att]?.n || 1 : 0, e.pair ? p.bf?.[e.pair]?.n || 1 : 0, e.tap ? 1 : 0, ctx.sick?.(id) ? 1 : 0, e.imprints || e.imprint || 0])}`).sort().join("|");
   const hit = CSB.memo.get(sig); if (hit) return hit;
   const { data, names } = CSB, cand = new Set();
   for (const z of Object.values(zones)) for (const n of z) (CSB.by.get(n) || []).forEach(i => cand.add(i));
@@ -2751,7 +2785,11 @@ function csbFor(p, ctx, hand) {
     const row = data.combos[i], k = row[row.length - 1]; let ok = true;
     for (let j = 0; j < k && ok; j++) { const n = names[row[j]], m = row[k + j];
       ok = !!((m & 1 && zones.B.has(n)) || (m & 2 && zones.H.has(n)) || (m & 4 && zones.G.has(n)) || (m & 8 && zones.E.has(n)) || (m & 16 && zones.C.has(n))) && (!(m & 64) || cmds.has(n)); }
-    if (ok) found.push({ i, set: new Set(row.slice(0, k).map(x => names[x])), feats: row.slice(2 * k, row.length - 1).map(f => data.feats[f]) });
+    if (!ok) continue;
+    const wait = [];
+    const sts = data.st?.[i];
+    if (sts) for (let j = 0; j < k && ok; j++) { const code = data.states[sts[j]]; if (code) { const r = csbState(code, data.cards[row[j]][0], names[row[j]], zones, bfE, p, ctx); if (!r) ok = false; else wait.push(...r); } }
+    if (ok) found.push({ i, wait, set: new Set(row.slice(0, k).map(x => names[x])), feats: row.slice(2 * k, row.length - 1).map(f => data.feats[f]) });
   }
   // already covered by one of the app's own combo alerts (theirs do more: Loop buttons, conditions)
   const own = hand.map(c => new Set((c.pieces || String(c.name || "").split(" + ")).map(csbNorm)));
@@ -2763,7 +2801,7 @@ function csbFor(p, ctx, hand) {
   const res = list.slice(0, 8).map(f => { const row = data.combos[f.i], k = row[row.length - 1], cards = row.slice(0, k).map(x => data.cards[x]);
     const id = cards.map(c => c[1]).join("-"), note = CSB.notes?.[f.i];
     return { key: `csb:${id}`, name: cards.map(c => c[0]).join(" + "), pieces: cards.map(c => c[0]), win: f.feats.some(x => /^(?:win the game|each opponent loses the game)$/i.test(x)), kind: "info", csb: id,
-      desc: `${f.feats.join(" · ")}.${note ? ` Needs: ${note}` : ""}`, more: list.length > 8 && f === list[7] ? list.length - 8 : 0 }; });
+      desc: `${f.feats.join(" · ")}.${note ? ` Needs: ${note}` : ""}`, wait: f.wait.length ? f.wait : null, more: list.length > 8 && f === list[7] ? list.length - 8 : 0 }; });
   if (CSB.memo.size > 300) CSB.memo.clear();
   CSB.memo.set(sig, res);
   return res;

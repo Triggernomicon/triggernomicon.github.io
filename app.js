@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261022c";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022c";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022c";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes } from "./engine.js?v=20261022c";
+import { firebaseConfig } from "./config.js?v=20261022d";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261022d";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261022d";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes } from "./engine.js?v=20261022d";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -757,14 +757,14 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.22c";
+const APP_VERSION = "2026.10.22d";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022c" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261022d" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
-const COMBO_DATA_V = "20261022";
+const COMBO_DATA_V = "20261022b";
 const comboLoad = (typeof window !== "undefined" && window.location?.protocol?.startsWith("http") ? fetch(`./combos.json?v=${COMBO_DATA_V}`).then(r => r.ok ? r.json() : null).then(d => setComboData(d)).catch(() => false) : Promise.resolve(false));
 let comboNotesAsked = false;
 
@@ -3991,7 +3991,7 @@ function startController(code, pid) {
   // ----- Infinite combos on my board -----
   let combosSeen = new Set();
   comboLoad.then(ok => { if (ok) try { render(); } catch {} });
-  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { cmds: deck?.cmds || [], hand: dig?.on ? [...dig.hand] : [], lib: dig?.on ? [...dig.lib] : null, cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
+  function myCombos() { return me && !isOut(me) ? detectCombos(me, n => lookupCard(n), { cmds: deck?.cmds || [], sick: id => { const e = me.bf?.[id]; return !!e && isSick({ ...e, o: e.o || lookupCard(e.n)?.o, t: e.t || lookupCard(e.n)?.t }, meOwner(), id); }, hand: dig?.on ? [...dig.hand] : [], lib: dig?.on ? [...dig.lib] : null, cast: Object.values(room?.casts || {}).filter(c => c.by === pid && (c.turnNo || 0) === (room?.turnNo || 0) && !c.countered).map(c => c.n) }) : []; }
   function announceCombos() {
     const list = myCombos(), keys = new Set(list.map(c => c.key));
     list.filter(c => !combosSeen.has(c.key)).forEach(c => { logTo(code, `♾ ${me.name} has ${c.csb ? "a combo" : "an infinite combo"}: ${c.name}${c.win ? " — that wins the game" : ""}`); toast(`♾ ${c.csb ? "Combo" : "Infinite combo"}: ${c.name}`); });
@@ -4001,7 +4001,7 @@ function startController(code, pid) {
     const list = myCombos();
     if (!list.length) return "";
     if (!comboNotesAsked && list.some(c => c.csb)) { comboNotesAsked = true; fetch(`./combo-notes.json?v=${COMBO_DATA_V}`).then(r => r.ok ? r.json() : null).then(n => { if (n) { setComboNotes(n); render(); } }).catch(() => {}); }
-    return list.map(c => `<div class="reminder combo-box"><div class="rem-src">♾ ${c.csb ? "Combo · from Commander Spellbook" : "Infinite combo"}${c.win ? " · wins" : ""}</div><div><b>${esc(c.name)}</b></div><div class="mini">${esc(c.desc)}${c.more ? ` (+${c.more} more)` : ""}</div><div class="row">${
+    return list.map(c => `<div class="reminder combo-box"><div class="rem-src">♾ ${c.csb ? "Combo · from Commander Spellbook" : "Infinite combo"}${c.win ? " · wins" : ""}</div><div><b>${esc(c.name)}</b></div><div class="mini">${esc(c.desc)}${c.more ? ` (+${c.more} more)` : ""}</div>${c.wait ? `<div class="mini combo-wait">⏳ Still needs: ${esc(c.wait.join("; "))}</div>` : ""}<div class="row">${
       c.csb ? `<a class="btn small" href="https://commanderspellbook.com/combo/${esc(c.csb)}/" target="_blank" rel="noopener">How it works ↗</a>` :
       c.kind === "drainAll" || c.kind === "dmgAll" ? `<button class="btn small primary" data-a="combo-go" data-k="${esc(c.key)}">♾ Run it: every opponent ${c.kind === "dmgAll" ? "takes" : "loses"} lethal</button>`
       : c.kind === "drainOne" ? seated(room).filter(o => o.id !== pid && !isOut(o)).map(o => `<button class="btn small primary" data-a="combo-go" data-k="${esc(c.key)}" data-o="${o.id}" style="border-left:4px solid ${esc(o.color)}">♾ ${esc(o.name)} loses</button>`).join("")

@@ -1,8 +1,9 @@
 # Builds the app's combo list from Commander Spellbook's bulk file (MIT license).
 # Usage: python3 tools/build_combos.py variants.json.gz .   (bulk file from https://json.commanderspellbook.com/variants.json.gz)
-import gzip,json,sys
+import gzip,json,sys,os
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__))); from states import parse
 d=json.load(gzip.open(sys.argv[1]))
-cards={}; cid={}; feats={}; out=[]; pre={}
+cards={}; cid={}; feats={}; out=[]; pre={}; stIdx={'':0}; st={}
 def ci(c):
     n=c['name']
     if n not in cards: cards[n]=len(cards); cid[n]=c['id']
@@ -20,8 +21,10 @@ for y in d['variants']:
     pr=[p['feature'] for p in y['produces']]
     show=[f['name'] for f in pr if f['status']=='S'] or [f['name'] for f in pr if f['status']=='C'] or [f['name'] for f in pr][:1]
     if y['notablePrerequisites']: pre[len(out)]=y['notablePrerequisites'][:200]
+    codes=['|'.join(f"{z}={parse(u[k],u['card']['name'])}" for z,k in (('B','battlefieldCardState'),('E','exileCardState'),('G','graveyardCardState')) if u[k]) for u in us]
+    if any(codes): st[len(out)]=[stIdx.setdefault(c,len(stIdx)) for c in codes]
     out.append(cs+zs+[fi(n) for n in show[:4]]+[len(cs)])  # [cards..., zones..., feats..., nCards]
-res={'src':'Commander Spellbook (https://commanderspellbook.com), MIT license','ts':d['timestamp'],'cards':[[n,cid[n]] for n in cards],'feats':list(feats),'combos':out}
+res={'src':'Commander Spellbook (https://commanderspellbook.com), MIT license','ts':d['timestamp'],'cards':[[n,cid[n]] for n in cards],'feats':list(feats),'combos':out,'states':list(stIdx),'st':st}
 s=json.dumps(res,separators=(',',':'),ensure_ascii=False); open(sys.argv[2]+'/combos.json','w').write(s)
 p=json.dumps({'ts':d['timestamp'],'pre':pre},separators=(',',':'),ensure_ascii=False); open(sys.argv[2]+'/combo-notes.json','w').write(p)
 print(len(out),len(cards),len(feats),len(s),len(gzip.compress(s.encode())),'notes',len(p),len(gzip.compress(p.encode())))
