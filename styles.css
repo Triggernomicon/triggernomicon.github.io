@@ -6,6 +6,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; cursor: pointer; }
+/* Links: gold on the dark background (the browser default blue was hard to read) */
+a:not(.btn), a:not(.btn):visited { color: var(--accent); text-decoration-color: rgba(217, 164, 65, .45); text-underline-offset: 3px; }
+a:not(.btn):hover { text-decoration-color: var(--accent); }
 input { font: inherit; }
 
 .btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 44px; font-weight: 600; }
