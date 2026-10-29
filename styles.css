@@ -178,6 +178,8 @@ textarea { resize: vertical; font-size: .9rem; }
 /* Mana symbols */
 .mana { display: inline-flex; align-items: center; gap: 1px; flex: none; vertical-align: middle; }
 .mana img { width: 15px; height: 15px; }
+.mana .ms-cost { font-size: .82em; margin: 0 .5px; vertical-align: -.08em; }
+.mana .ms-cost.ms-split { font-size: .9em; }
 
 /* Keep controls clear of the hosting badge in the bottom-right corner */
 .ctl { padding-bottom: 96px; }

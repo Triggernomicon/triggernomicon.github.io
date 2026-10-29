@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261029a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261029a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261029a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos } from "./engine.js?v=20261029a";
+import { firebaseConfig } from "./config.js?v=20261029b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261029b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261029b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261029b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -558,11 +558,40 @@ function slim(c) {
   };
 }
 // Mana cost as Scryfall symbol icons, e.g. {2}{G}{G}
+// (the Mana font by Andrew Gioia, bundled as mana.css + mana.woff2, so no symbol has to load from elsewhere)
+function symIcon(sym) {
+  const k = String(sym).toLowerCase().replace(/\//g, ""), cls = k === "t" ? "tap" : k === "q" ? "untap" : k;
+  const split = /^(?:[wubrgc2][wubrg]|[wubrg]{2}p)$/.test(k); // hybrid: {W/U}, {2/W}, {W/U/P}
+  return `<i class="ms ms-${esc(cls)} ms-cost${split ? " ms-split" : ""}" role="img" aria-label="{${esc(sym)}}" title="{${esc(sym)}}"></i>`;
+}
 function manaHtml(m) {
   if (!m) return "";
   const front = String(m).split(" // ")[0];
-  return `<span class="mana">${front.replace(/\{([^}]+)\}/g, (_, sym) =>
-    `<img src="https://svgs.scryfall.io/card-symbols/${encodeURIComponent(sym.replace(/\//g, ""))}.svg" alt="{${esc(sym)}}" title="{${esc(sym)}}">`)}</span>`;
+  return `<span class="mana">${front.replace(/\{([^}]+)\}/g, (_, sym) => symIcon(sym))}</span>`;
+}
+// Mana symbols inside any text the app shows ("Add {G}{G}", "Pay {2}", "{T}: …"): swapped for the symbol icons after each render
+const SYM_RE = /\{(?:[WUBRGCSXYZTQE]|\d{1,2}|[WUBRGC2]\/[WUBRGP]|[WUBRG]\/[WUBRG]\/P)\}/;
+const SYM_SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "OPTION", "SELECT", "INPUT", "TITLE"]);
+function symbolize(root) {
+  if (!root || typeof document === "undefined" || !document.createTreeWalker) return;
+  const walker = document.createTreeWalker(root, 4 /* text */, { acceptNode: n => SYM_RE.test(n.nodeValue || "") && !SYM_SKIP.has(n.parentNode?.nodeName) && !n.parentNode?.closest?.(".no-sym, [contenteditable]") ? 1 : 2 });
+  const hits = []; while (walker.nextNode()) hits.push(walker.currentNode);
+  for (const t of hits) {
+    const frag = document.createDocumentFragment();
+    for (const part of t.nodeValue.split(new RegExp(`(${SYM_RE.source}(?:${SYM_RE.source})*)`, "g"))) {
+      if (!part) continue;
+      if (SYM_RE.test(part) && new RegExp(`^(?:${SYM_RE.source})+$`).test(part)) { const span = document.createElement("span"); span.innerHTML = manaHtml(part); frag.appendChild(span.firstChild); }
+      else frag.appendChild(document.createTextNode(part));
+    }
+    t.parentNode.replaceChild(frag, t);
+  }
+}
+if (typeof window !== "undefined" && typeof MutationObserver !== "undefined" && !/jsdom/i.test(navigator?.userAgent || "")) { // (the test sim reads plain text, so it keeps the braces)
+  let symQ = null;
+  const symRun = () => { const roots = symQ; symQ = null; roots.forEach(r => r.isConnected && symbolize(r)); };
+  new MutationObserver(ms => { const add = ms.flatMap(m => m.type === "characterData" ? [m.target.parentNode] : [...m.addedNodes].map(n => n.nodeType === 3 ? n.parentNode : n)).filter(Boolean);
+    if (!add.length) return; if (!symQ) { symQ = new Set(); (window.requestAnimationFrame || setTimeout)(symRun); } add.forEach(n => symQ.add(n)); })
+    .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 }
 // An activated ability's cost with real mana symbols: "{1}{G}{G}{G}", "{T}, Sacrifice a creature"
 const abCostHtml = c => `<span class="ab-cost">${String(c || "").split(/(\{[^}]+\})/).map(x => /^\{[^}]+\}$/.test(x) ? manaHtml(x) : esc(x)).join("")}</span>`;
@@ -759,12 +788,12 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.29a";
+const APP_VERSION = "2026.10.29b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261029a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261029b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
-const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license).`;
+const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
 const COMBO_DATA_V = "20261022b";
 const comboLoad = (typeof window !== "undefined" && window.location?.protocol?.startsWith("http") ? fetch(`./combos.json?v=${COMBO_DATA_V}`).then(r => r.ok ? r.json() : null).then(d => setComboData(d)).catch(() => false) : Promise.resolve(false));
@@ -6261,7 +6290,17 @@ function startController(code, pid) {
       ${dc.near.length ? `<details><summary class="muted">One card away (${dc.near.length} card${dc.near.length === 1 ? "" : "s"} would add a combo)</summary>${dc.near.slice(0, 25).map(x => `<div class="ab-row"><b>${esc(x.card)}</b> <span class="muted">→ ${x.combos.length} combo${x.combos.length === 1 ? "" : "s"}, e.g.</span> ${cLink(x.combos[0])}</div>`).join("")}</details>` : ""}
       <p class="muted">From <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a>'s combo list (combos of up to four cards).</p>
     </section>`;
-    deckInfo.innerHTML = libHtml + digHtml + abilitiesHtml + combosHtml + `
+    const bk = bracketCheck(deck.cards.map(c => c.n), deck.cmds || [], n => lookupCard(n));
+    const chipList = (label, list) => list.length ? `<div class="label">${label} (${list.length})</div><div class="chips">${list.map(n => `<span class="chip">${esc(n)}</span>`).join("")}</div>` : "";
+    const bracketHtml = `
+    <section class="card">
+      <h3>Commander bracket: ${bk.min >= 4 ? "4 or higher" : bk.min === 3 ? "3 or higher" : "1–2 by the list"}</h3>
+      <p class="muted">${bk.reasons.length ? `Why: ${esc(bk.reasons.join("; "))}.` : "No Game Changers, mass land denial or two-card combos found, so the card list fits Bracket 1 or 2."} Brackets are mostly about how fast the deck aims to win and what your table expects, so this is a floor, not a verdict.</p>
+      ${chipList("Game Changers", bk.gcs)}${chipList("Mass land denial", bk.mld)}${chipList("Extra-turn cards", bk.xt)}
+      ${bk.two.length ? `<div class="label">Two-card combos (${bk.two.length})</div>${bk.two.slice(0, 12).map(c => `<div class="ab-row"><a href="https://commanderspellbook.com/combo/${esc(c.id)}/" target="_blank" rel="noopener">${esc(c.pieces.join(" + "))}</a> <span class="muted">· ${esc(c.feats.slice(0, 2).join(", "))}</span></div>`).join("")}` : ""}
+      <p class="muted">Rules from Wizards' <a href="https://magic.wizards.com/en/news/announcements/introducing-commander-brackets-beta" target="_blank" rel="noopener">Commander Brackets</a> (beta), Game Changers as of the February 2026 update.${bk.comboData ? "" : " Two-card combos appear once the combo list has loaded."}</p>
+    </section>`;
+    deckInfo.innerHTML = libHtml + digHtml + abilitiesHtml + combosHtml + bracketHtml + `
     <section class="card">
       <h3>${esc(deck.name || "Untitled")}</h3>
       <p><b>${total}</b> cards · imported ${new Date(deck.at).toLocaleDateString()}</p>

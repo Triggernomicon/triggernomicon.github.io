@@ -964,6 +964,11 @@ export function parseAbilities(card) {
 const COND_LABEL = {
   phase: "at the start of a phase", oppcast: "when an opponent casts", oppdraw: "when an opponent draws", "self-etb": "when it enters/attacks", tokens: "when you create tokens", sac: "when you sacrifice",
   land: "landfall", creature: "when a creature enters", tempt: "when the Ring tempts you", ringbearer: "when you choose a Ring-bearer", cast: "when you cast", dies: "when a creature dies",
+  selfdies: "when it dies", selfsac: "when you sacrifice it", selftap: "when it becomes tapped", youdraw: "when you draw", gainlife: "when you gain life", discard: "when you discard",
+  oppdiscard: "when an opponent discards", crime: "when you commit a crime", youattack: "when you attack", attack: "when a creature attacks", typedAtk: "when your creatures attack",
+  attackN: "when you attack with several creatures", mutates: "when it mutates", heroic: "when you target your creature", gyleave: "when cards leave your graveyard",
+  expend: "when you expend", counters: "when counters go on it", tokleave: "when a token leaves", tokOrSac: "when a token leaves or you sacrifice", playOrCast: "when you play a land or cast a spell",
+  m1m1put: "when -1/-1 counters are put", explore: "when a creature explores",
 };
 // What an instant or sorcery does when it resolves
 const spellCache = new Map();
@@ -1009,8 +1014,8 @@ export function describeAbilities(ab) {
     : r.kind === "plusOn" ? `Each ${r.on} you create comes with a ${r.name} (auto)`
     : r.kind === "plus" ? `Adds ${r.many ? "that many" : "one"} ${r.name} when you create tokens (auto)`
     : "Clue, Food or Treasure → one of each (auto)"));
-  const PH = { upkeep: "upkeep", draw: "draw step", main1: "first main phase", end: "end step" };
-  const condLabel = c => c.ev === "typed" ? `when ${c.other ? "another" : "a"} ${c.types.join(" or ")} enters` : c.ev === "phase" ? `at ${c.whose === "your" ? "your" : c.whose === "opp" ? "each opponent's" : "each"} ${PH[c.phase]}` : COND_LABEL[c.ev];
+  const PH = { upkeep: "upkeep", draw: "draw step", main1: "first main phase", main2: "second main phase", combat: "combat", end: "end step" };
+  const condLabel = c => c.ev === "typed" ? `when ${c.other ? "another" : "a"} ${c.types.join(" or ")} enters` : c.ev === "phase" ? `at ${c.whose === "your" ? "your" : c.whose === "opp" ? "each opponent's" : "each"} ${PH[c.phase] || c.phase || "phase"}` : COND_LABEL[c.ev] || "when it triggers";
   ab.trig.forEach(t => lines.push(`${condLabel(t.cond)}${t.cond.what ? ` ${t.cond.what}` : ""}: ${t.punish ? "asks that player" : t.auto ? (t.partial ? "auto + reminder" : "auto") : "reminder"}`));
   if (ab.cda) lines.push(`P/T = number of ${ab.cda}s you control (auto)`);
   return lines;
@@ -2790,6 +2795,27 @@ export function deckCombos(names, cmds = []) {
   const fullMin = full.filter(f => !full.some(g => g !== f && g.pieces.length < f.pieces.length && sub(g.pieces, f.pieces) && f.feats.every(x => g.feats.includes(x)))).sort((a, b) => a.pieces.length - b.pieces.length);
   const nearList = [...near.entries()].map(([card, list]) => ({ card, combos: list.sort((a, b) => a.pieces.length - b.pieces.length) })).sort((a, b) => b.combos.length - a.combos.length);
   return { full: fullMin, near: nearList };
+}
+// ----- Commander Brackets (Wizards of the Coast, beta; Game Changers as of the February 9, 2026 update, still current in October 2026) -----
+export const GAME_CHANGERS = new Set(["Ad Nauseam", "Ancient Tomb", "Aura Shards", "Biorhythm", "Bolas's Citadel", "Braids, Cabal Minion", "Chrome Mox", "Coalition Victory", "Consecrated Sphinx", "Crop Rotation", "Cyclonic Rift", "Demonic Tutor", "Drannith Magistrate", "Enlightened Tutor", "Farewell", "Field of the Dead", "Fierce Guardianship", "Force of Will", "Gaea's Cradle", "Gamble", "Gifts Ungiven", "Glacial Chasm", "Grand Arbiter Augustin IV", "Grim Monolith", "Humility", "Imperial Seal", "Intuition", "Jeska's Will", "Lion's Eye Diamond", "Mana Vault", "Mishra's Workshop", "Mox Diamond", "Mystical Tutor", "Narset, Parter of Veils", "Natural Order", "Necropotence", "Notion Thief", "Opposition Agent", "Orcish Bowmasters", "Panoptic Mirror", "Rhystic Study", "Seedborn Muse", "Serra's Sanctum", "Smothering Tithe", "Survival of the Fittest", "Teferi's Protection", "Tergrid, God of Fright", "Thassa's Oracle", "The One Ring", "The Tabernacle at Pendrell Vale", "Underworld Breach", "Vampiric Tutor", "Worldly Tutor"]);
+const MLD_NAMED = new Set(["Armageddon", "Cataclysm", "Catastrophe", "Decree of Annihilation", "Jokulhaups", "Obliterate", "Ravages of War", "Ruination", "Wildfire"]); // Wizards' examples
+const MLD_RE = /\bdestroy all lands\b|\beach player sacrifices (?:all|half|four|five|six|seven) (?:the )?lands\b|\bsacrifices all lands\b|\bdestroy all (?:artifacts, creatures, and )?lands\b|\bexile all lands\b|\blands don't untap during their controllers' untap steps\b/i;
+const XTURN_RE = /\btakes? an extra turn\b|\btake an extra turn\b/i;
+// What the list can tell about a deck's bracket: Game Changers, mass land denial, extra-turn cards, two-card combos (from Spellbook's data)
+export function bracketCheck(names, cmds = [], lookup = () => null) {
+  const all = [...new Set([...cmds, ...names])], front = n => String(n).split(" // ")[0];
+  const gcs = all.filter(n => GAME_CHANGERS.has(n) || GAME_CHANGERS.has(front(n)));
+  const mld = all.filter(n => MLD_NAMED.has(front(n)) || (MLD_RE.test(lookup(n)?.o || "") && !/search (?:their|your) library for (?:up to \w+ )?basic land/i.test(lookup(n)?.o || ""))); // lands that get replaced (From the Ashes) don't count
+  const xt = all.filter(n => XTURN_RE.test(lookup(n)?.o || "") && !/\bopponent\b[^.]*takes? an extra turn/i.test(lookup(n)?.o || ""));
+  const dc = deckCombos(all, cmds);
+  const two = (dc?.full || []).filter(c => c.pieces.length === 2 && c.feats.some(f => /^(?:infinite|win the game|each opponent loses the game)/i.test(f)));
+  const reasons = []; let min = 2;
+  if (gcs.length > 3) { min = 4; reasons.push(`${gcs.length} Game Changers (Bracket 3 allows up to 3)`); }
+  else if (gcs.length) { min = Math.max(min, 3); reasons.push(`${gcs.length} Game Changer${gcs.length === 1 ? "" : "s"} (Brackets 1–2 allow none)`); }
+  if (mld.length) { min = 4; reasons.push("mass land denial (only Bracket 4 and up)"); }
+  if (two.length) { min = Math.max(min, 3); reasons.push(`${two.length} two-card combo${two.length === 1 ? "" : "s"} (none intended in Brackets 1–2; Bracket 3 not early-game)`); }
+  if (xt.length > 2) reasons.push(`${xt.length} extra-turn cards (Brackets 1–3 expect few, not chained)`);
+  return { min, gcs, mld, xt, two, reasons, comboData: !!dc };
 }
 export const comboDataInfo = () => CSB ? { combos: CSB.data.combos.length, ts: CSB.data.ts } : null;
 // A piece's state from Spellbook ("without summoning sickness", "with two or more charge counters on it"…), checked
