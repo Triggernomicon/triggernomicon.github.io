@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261025a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261025a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261025a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos } from "./engine.js?v=20261025a";
+import { firebaseConfig } from "./config.js?v=20261029a";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261029a";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261029a";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos } from "./engine.js?v=20261029a";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -759,10 +759,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.25a";
+const APP_VERSION = "2026.10.29a";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261025a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261029a" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2515,6 +2515,7 @@ function startController(code, pid) {
         logTo(code, `⚔ ${me.name}'s ${r.src} ${/^([2-9]|\d\d+) /.test(r.src) ? "attack" : "attacks"} ${o.name}`);
         { const cnt = Math.max(1, a.times || 1), lose = Object.values(o.bf || {}).reduce((acc, x) => { const t = String(x.o || lookupCard(x.n)?.o || ""); let m = t.match(/whenever a creature attacks you(?: or a planeswalker you control)?, that creature's controller loses (\d+) life and you gain \1 life/i); if (m) acc.push([x, Number(m[1])]); m = t.match(/whenever a creature with power (\d+) or greater attacks you, its controller loses (\d+) life and you gain \2 life/i); if (m && (a.power || 0) >= Number(m[1])) acc.push([x, Number(m[2])]); return acc; }, []);
           lose.forEach(([x, n]) => { const tot = n * cnt; mutate(p => { p.life = (p.life ?? START_LIFE) - tot; }); sendOrders({ [oid]: {} }, { how: "gainLife", n: tot, src: dispName(x), why: `${me.name}'s ${r.src} attacked: gain ${tot}` }); logTo(code, `⚙ ${o.name}'s ${dispName(x)}: ${me.name} loses ${tot}, ${o.name} gains ${tot}`); });
+          Object.values(me.bf || {}).forEach(x => { const m = String(x.o || lookupCard(x.n)?.o || "").match(/whenever a creature attacks one of your opponents, that player loses (\d+) life/i); if (m) reminders.push(normalizeRem({ id: newId(), src: dispName(x), text: `${o.name} was attacked: they lose ${Number(m[1]) * cnt} life.`, times: 1, oppLose: { n: Number(m[1]) * cnt, only: oid } })); }); // Calculating Lich
           const ck = combatKey(); atkCount = atkCount.k === ck ? atkCount : { k: ck, n: 0, fired: {} }; const was = atkCount.n; atkCount.n += cnt;
           seated(room).filter(x => !isOut(x)).forEach(ow => Object.values(ow.bf || {}).forEach(x => { const t = String(x.o || lookupCard(x.n)?.o || ""), mine = ow.id === pid;
             [[3, /whenever a player attacks with three or more creatures, ([^\n.]+)\./i], [5, /whenever a player attacks with five or more creatures, ([^\n.]+)\./i]].forEach(([need, re]) => { const m = t.match(re), fk = `${ow.id}|${x.n}|${need}`; if (!m || was >= need || atkCount.n < need || atkCount.fired[fk]) return; atkCount.fired[fk] = 1;
@@ -2552,8 +2553,7 @@ function startController(code, pid) {
       if (ord) { const need = ord[1] === "three" ? 3 : Number(ord[1]), now = (me.bf?.[e.id]?.c?.p1p1 || 0) + 1;
         mutate(p => { const x = p.bf?.[e.id]; if (x) { x.c ||= {}; x.c.p1p1 = (x.c.p1p1 || 0) + 1; } }); logTo(code, `⚙ ${dispName(a)}: +1/+1 counter on ${src} (${now})`);
         if (now >= need) { const sw = String(a.o || lookupCard(a.n)?.o || "").match(/^when you sacrifice this aura, ([^\n]+)/im); const sp = sw && spellAbility({ n: `${a.n} · sacrificed`, t: "Instant", o: sw[1] });
-          reminders.push({ id: newId(), src: dispName(a), text: `${src} has ${now} +1/+1 counters: sacrifice ${dispName(a)} (move it to the graveyard).`, times: 1 });
-          if (sw) reminders.push(normalizeRem({ id: newId(), src: `${dispName(a)} (sacrificed)`, text: sw[1].replace(/^\w/, c => c.toUpperCase()), times: 1, ...(sp?.effs.length ? { effs: sp.effs } : {}) })); } }
+          reminders.push({ id: newId(), src: dispName(a), text: `${src} has ${now} +1/+1 counters: sacrifice ${dispName(a)} (open it ▼ and tap Sacrificed; its "when you sacrifice" ability comes up then).`, times: 1 }); void sp; } }
       const tx = ord ? null : tx0;
       if (tx) { const sp = spellAbility({ n: `${a.n} · attack`, t: "Instant", o: tx.replace(/^you may /i, "") }); const ef = sp.effs.filter(f => ["fetch", "tok", "pumpTarget", "countersTarget", "countersEach", "ping", "drain"].includes(f.k));
         if (ef.some(f => f.k === "fetch")) reminders.push({ id: newId(), src: dispName(a), text: "Search your library", fetch: ef.find(f => f.k === "fetch"), left: 1, times: 1, note: /you may/i.test(tx) ? "Optional." : "" });
@@ -3319,7 +3319,7 @@ function startController(code, pid) {
     if (!list.length) return;
     const done = list.filter(([, e]) => e.c.time === 1);
     list.forEach(([, e]) => logTo(code, `⏳ ${me.name}'s ${dispName(e)}: time counter removed (${e.c.time - 1} left)${e.c.time === 1 ? " → sacrificed" : ""}`));
-    const events = done.flatMap(([id, e]) => { const cre = /\bCreature\b/.test(e.t || ""); return [{ type: "sac", name: e.n, n: 1, token: false, creature: cre }, ...(cre ? [{ type: "dies", n: 1, token: false, ids: [id] }] : [])]; });
+    const events = done.flatMap(([id, e]) => { const cre = /\bCreature\b/.test(e.t || ""); return [{ type: "sac", name: e.n, n: 1, token: false, creature: cre, ids: [id] }, ...(cre ? [{ type: "dies", n: 1, token: false, ids: [id] }] : [])]; });
     act(events, p => list.forEach(([id]) => { const x = p.bf?.[id]; if (x?.c?.time) { x.c.time -= 1; if (!x.c.time) delete x.c.time; } }),
       p => done.forEach(([id]) => { const x = p.bf?.[id]; if (!x) return; delete p.bf[id]; toZone(p, x, "gy"); }));
   }
@@ -3969,7 +3969,7 @@ function startController(code, pid) {
       if (now >= sg.last) setTimeout(() => {
         if (!me.bf?.[id]) return;
         logTo(code, `📜 ${me.name}'s ${dispName(e)}: final chapter done, sacrificed`);
-        act([{ type: "sac", name: e.n, n: 1, token: false, creature: false, artifact: false }], p => { const x = p.bf?.[id]; if (!x) return; delete p.bf[id]; toZone(p, x, "gy"); });
+        act([{ type: "sac", name: e.n, n: 1, token: false, creature: false, artifact: false, ids: [id] }], p => { const x = p.bf?.[id]; if (!x) return; delete p.bf[id]; toZone(p, x, "gy"); });
       }, 0);
     });
   }
@@ -5708,7 +5708,7 @@ function startController(code, pid) {
     const correction = dest === "Graveyard" && /when this [a-z]+ is put into a graveyard from the battlefield, return it to its owner's hand/i.test(e.o || lookupCard(e.n)?.o || "")
       && !confirm(`${dispName(e)} goes back to your hand when it hits the graveyard from the battlefield.\n\nOK = that happened (it returns to hand).\nCancel = I'm just fixing a mistake (leave it in the graveyard).`);
     const dies = (dest === "Graveyard" || dest === "Sacrificed") && creature;
-    const events = [...(dest === "Sacrificed" ? [{ type: "sac", name: e.n, n: 1, token: false, creature, artifact: /\bArtifact\b/.test(e.t || "") }] : []),
+    const events = [...(dest === "Sacrificed" ? [{ type: "sac", name: e.n, n: 1, token: false, creature, artifact: /\bArtifact\b/.test(e.t || ""), ids: [id] }] : []),
       ...(dies ? [{ type: "dies", n: 1, token: false, ids: [id] }] : []),
       ...(!dies && dest !== "Battlefield" ? [{ type: "leaves", ids: [id], dest }] : [])]; // "when this leaves the battlefield" (Fiend Hunter, Lich's Mastery): exile, hand, or a noncreature to the graveyard
     act(events, null, p => { // it leaves after triggers check, so its own "when this dies" still fires

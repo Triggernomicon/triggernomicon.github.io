@@ -699,6 +699,7 @@ function parseCond(cond, cardName) {
   if (/^you cycle or discard (?:another|a) card$/.test(c)) return { ev: "discard", once: false }; // Archfiend of Ifnir (cycling is caught where you cycle)
   if (/^an opponent discards (a|one or more) cards?$/.test(c)) return { ev: "oppdiscard", once: /one or more/.test(c) };
   if (c === `${short} dies` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} dies` || /^this (creature|permanent|vehicle) dies$/.test(c)) return { ev: "selfdies" };
+  if (/^you sacrifice (?:this (?:creature|aura|artifact|enchantment|permanent|equipment|vehicle|land)|it)$/.test(c) || c === `you sacrifice ${short}`) return { ev: "selfsac" };
   if (/^you choose a creature as your ring-bearer$/.test(c)) return { ev: "ringbearer" };
   const akw = c.match(/^(?:a|another) creature you control with ([a-z ]+?) attacks$/);
   if (akw && !c.startsWith(short)) return { ev: "attack", types: null, kw: akw[1].trim(), other: /^another/.test(c) };
@@ -794,13 +795,19 @@ export function kwExpand(o) {
     .replace(/^Sunburst\b[^\n]*/m, m => `${m}\nWhen this permanent enters, it gets one ${/creature enters/i.test(m) ? "+1/+1" : "charge"} counter for each color of mana spent to cast it. Add them by hand on the card.`)
     .replace(/^Devour (land |artifact )?(\d+)[^\n]*/m, (m, what, n) => `${m}\nWhen this creature enters, devour: you may sacrifice any number of ${(what || "creature ").trim()}s; it gets ${n === "1" ? "one +1/+1 counter" : `${kwNum(n)} +1/+1 counters`} for each. Move them to the graveyard and add the counters by hand on the card.`)
     // "Whenever this creature attacks or dies, …" (Balor), "deals combat damage to a player or dies" (Park Heights Maverick): two triggers, one effect
-    .replace(/^(Whenever|When) this (creature|permanent) ([^,\n]+?) or dies, ([^\n]+)/gm, (m, w, what, a, e) => /\b(?:enters|attacks and|blocks or)\b/.test(a) ? m : `Whenever this ${what} ${a}, ${e}\nWhen this ${what} dies, ${e}`)
+    .replace(/^((?:[^—\n]{1,40} — )?)(Whenever|When) (this creature|this permanent|(?!a |an |another |one or more )[A-Z][^,\n]*?) ((?:attacks|deals combat damage to a player|blocks)) or dies, ([^\n]+)/gm, (m, pre, w, who, a, e) => `${pre}Whenever ${who} ${a}, ${e}\nWhen ${who} dies, ${e}`)
     // "Whenever you cast a black spell or a Swamp you control enters, …" (the Magus Staffs)
     .replace(/^Whenever you cast (an? [^,\n]+? spell) or (an? [^,\n]+? enters), ([^\n]+)/gm, (_, a, b, e) => `Whenever you cast ${a}, ${e}\nWhenever ${b}, ${e}`)
+    // "When this creature enters or dies, …" (Mogg War Marshal, Stitcher's Supplier), "another creature you control enters or dies" (Pelt Collector), "enters or becomes tapped"
+    .replace(/^(When|Whenever) ([^,\n]+?) enters or (dies|becomes tapped|leaves the battlefield), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\n${w} ${who} ${b}, ${e}`)
+    // "When this artifact enters and when you sacrifice it, …" (Carrot Cake, Heaped Harvest)
+    .replace(/^(When this [a-z]+ enters) and (when you sacrifice it), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\nWhen you sacrifice it, ${e}`)
+    // "Whenever Millicent or another nontoken Spirit you control dies or deals combat damage to a player, …"
+    .replace(/^(Whenever [^,\n]+?) dies or deals combat damage to a player, ([^\n]+)/gm, (_, a, e) => `${a} dies, ${e}\n${a} deals combat damage to a player, ${e}`)
     // "At the beginning of your upkeep and whenever you cast a white spell, …" (Shrines)
     .replace(/^(At the beginning of [^,\n]+?) and (whenever [^,\n]+), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
     // "When X enters and at the beginning of your upkeep, …" (Minsc & Boo): two triggers with one effect
-    .replace(/^(When [^,\n]*? enters) and (at the beginning of [^,\n]+), ([^\n]+)/m, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
+    .replace(/^(?:[^—\n]{1,40} — )?(When [^,\n]*? enters) and (at the beginning of [^,\n]+), ([^\n]+)/m, (_, a, b, e) => `${a}, ${e}\n${b[0].toUpperCase()}${b.slice(1)}, ${e}`)
     .replace(/^Training\b[^\n]*/m, "Whenever this creature attacks with another creature with greater power, put a +1/+1 counter on this creature.")
     .replace(/^Outlast ((?:\{[^}]+\})+)[^\n]*/m, "$1, {T}: Put a +1/+1 counter on this creature. Activate only as a sorcery.")
     .replace(/^Mentor\b[^\n]*/m, "Whenever this creature attacks, put a +1/+1 counter on target attacking creature with lesser power.")
@@ -1175,6 +1182,7 @@ function matches(cond, ev, srcId) {
       const mine = ev.id ? (curP.bf?.[ev.id] && isT(curP.bf[ev.id]) ? 1 : 0) : ev.tok && isT(null, ev.tok) ? ev.n || 1 : 0;
       return mine && now >= cond.min && now - mine < cond.min ? 1 : 0;
     }
+    case "selfsac": return ev.type === "sac" && ev.ids?.includes(srcId) ? 1 : 0; // Ordeals, Daemogoth Woe-Eater: "when you sacrifice this"
     case "selfdies": return (ev.type === "dies" || (cond.leaves && ev.type === "leaves" && (!cond.toGy || /^(?:Graveyard|Sacrificed)$/.test(ev.dest || "")))) && ev.ids?.includes(srcId) ? 1 : 0;
     case "attack": {
       if (ev.type !== "attacks" || (cond.other && ev.id === srcId)) return 0;
@@ -1486,8 +1494,10 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (f.k === "tokCopy") ctx.remind.push({ src, srcId, text: f.n != null && f.n !== 1 ? `Create ${f.n} tokens that are copies of target token you control.` : `Create a token that's a copy of target token you control.${f.twoIf ? ` (A ${f.twoIf}: two copies.)` : ""}`, tokCopy: true, ...(f.n != null ? { copyN: f.n } : {}), ...(f.twoIf ? { twoIf: f.twoIf } : {}), times: 1 });
         if (f.k === "drainCount") {
           const self = srcId && p.bf?.[srcId];
-          const n = countTypes(p, f.types) - (f.other && self && f.types.some(t => permanentMatches(self, { alts: [[t]], controller: "any" })) ? 1 : 0);
-          if (n > 0) { ctx.drain += n; p.life = (p.life ?? 40) + n; ctx.logs.push(`⚙ ${src}: each of ${ctx.who ? ctx.who + "'s " : ""}opponents loses ${n} life and ${ctx.who || "you"} gained ${n} (${f.types.join("/")})`); }
+          const colorsAmong = /^colors? among permanent/.test(f.types[0] || ""); // Vivid (Shimmercreep): colors among the permanents you control
+          const n = colorsAmong ? new Set(Object.values(p.bf || {}).flatMap(e => (String(e.m || "").match(/[WUBRG]/g) || []))).size
+            : countTypes(p, f.types) - (f.other && self && f.types.some(t => permanentMatches(self, { alts: [[t]], controller: "any" })) ? 1 : 0);
+          if (n > 0) { ctx.drain += n; p.life = (p.life ?? 40) + n; ctx.logs.push(`⚙ ${src}: each of ${ctx.who ? ctx.who + "'s " : ""}opponents loses ${n} life and ${ctx.who || "you"} gained ${n} (${colorsAmong ? "colors" : f.types.join("/")})`); }
         }
         if (f.k === "tplayerTok") ctx.remind.push({ src, srcId, text: `Target player creates ${f.n === 1 ? "a" : f.n}${f.tapped ? " tapped" : ""} ${f.desc} token${f.n === 1 ? "" : "s"}.`, tplayerTok: f, times: 1 });
         if (f.k === "untapAll" || f.k === "untapN") {
