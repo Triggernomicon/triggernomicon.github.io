@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261030b";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030b";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030b";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030b";
+import { firebaseConfig } from "./config.js?v=20261030c";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030c";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030c";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030c";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -534,6 +534,12 @@ function extraCounters(e) {
 }
 // Layouts whose second face isn't part of the front card (transform, modal double-faced, adventure, prepare…)
 const FRONT_ONLY = ["transform", "modal_dfc", "adventure", "prepare", "reversible_card", "flip"];
+// Rooms (Duskmourn): two doors; only unlocked doors' abilities work. Each door's "When you unlock this door" is named, so the right one fires.
+const isRoomCard = c => c?.layout === "split" && /\bRoom\b/.test(c.t || "") && c.faces?.length === 2;
+const roomText = (c, u) => c.faces.filter((f, i) => u[i]).map(f => String(f.o || "").replace(/\bWhen you unlock this door\b/g, `When you unlock ${f.n}`)).join("\n");
+function roomCard(c, u, castI) {
+  return { ...c, o: roomText(c, u), m: castI != null ? c.faces[castI].m || "" : c.m, t: c.faces[0].t || c.t, room: { u }, mode: `d${(u[0] ? 1 : 0) + (u[1] ? 2 : 0)}`, ...(castI != null ? { roomCast: castI } : {}) };
+}
 // One face of a multi-face card, as a card the app can play
 function faceCard(card, i) {
   const f = card?.faces?.[i];
@@ -636,6 +642,7 @@ function bfEntry(card) {
   if (card.fd && card.fname) e.fname = card.fname; // face-down: "🂠 Face-down 2/2"
   if (card.nick) e.nick = card.nick;
   if (card.mode) e.mode = card.mode;
+  if (card.room) e.room = card.room;
   const cda = card.o ? abilitiesOf(card).cda : null;
   if (cda) e.cda = cda;
   if (card.p != null && card.tg != null) { e.p = String(card.p); e.tg = String(card.tg); }
@@ -788,10 +795,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.30b";
+const APP_VERSION = "2026.10.30c";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030b" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030c" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2517,6 +2524,7 @@ function startController(code, pid) {
         const vig = kwsOf(full, pid, bid).some(x => x.k === "vigilance");
         logTo(code, `${me.name}: ${dispName(e)} attacks`);
         exaltedCheck({ kind: "bf", id: bid, name: dispName(e) });
+        exertCheck(bid);
         act([{ type: "attacks", id: bid, t: e.t || "", kws: kwsOf(full, pid, bid).map(x => x.k) }, ...(!vig && !e.tap ? [{ type: "tapped", id: bid }] : []), ...youAttackEv()], p => { if (!vig) p.bf[bid].tap = true; markAttacked(p, "bf", bid, 1); p.youAtk = combatKey(); });
         if ((e.c?.p1p1 || 0) > 0) { const by = Object.values(me.bf || {}).filter(x => /whenever a creature you control with a \+1\/\+1 counter on it attacks, double the number of \+1\/\+1 counters on it/i.test(x.o || lookupCard(x.n)?.o || "")).length;
           if (by) { act([], p => { const x = p.bf?.[bid]; if (x?.c?.p1p1) x.c.p1p1 *= 2 ** by; }); logTo(code, `⚔ ${dispName(e)}'s +1/+1 counters doubled (Byrke)`); } }
@@ -2885,6 +2893,7 @@ function startController(code, pid) {
       `<button class="btn small" data-a="ans-play" data-i="${i}" data-kind="${kind}">${icon[kind]} ${esc(dispName(c))} ${costHtml(c)}</button>`).join("")}</div>`;
   }
   function playCard(card, opts = {}) {
+    if (isRoomCard(card) && !card.room) card = roomCard(card, [true, false], 0);
     const fz = opts.fromZone;
     if (fz) mutate(p => { delete p[fz.z]?.[fz.id]; });
     const giftM = !opts.via && (card.o || "").match(/^Gift (an? [^(\n]+?)\s*(?:\(|$)/m);
@@ -3119,6 +3128,7 @@ function startController(code, pid) {
     }, null, castKey ? { tag: castKey, merge: true } : { merge: !!fz });
     const fresh = me.bf?.[id];
     if (fresh) setTimeout(() => { legendCheck(id); render(); }, 0);
+    if (fresh && card.room && card.roomCast != null) { const full = card.room.u.every(Boolean); setTimeout(() => act([{ type: "unlock", id, door: card.faces[card.roomCast].n.toLowerCase() }, ...(full ? [{ type: "fullUnlock", id }] : [])]), 0); } // casting a door unlocks it
     const abl = String(card.o || "").match(/^When this Equipment enters, create an? ([^.]*?)\b([A-Z][a-z]+) creature token, then attach this Equipment to it/m); // Ancestral Blade
     if (fresh && (abl || /^(Living weapon|Job select|For Mirrodin!)/m.test(card.o || ""))) setTimeout(() => {
       if (abl) { act([{ type: "create", name: abl[2], n: 1, desc: `${abl[1]}${abl[2]} creature`, src: dispName(card) }]); setTimeout(() => { const k = Object.keys(me.tokens || {}).find(x => me.tokens[x].name === abl[2] && !eqList(me.tokens[x]).length); if (k && me.bf?.[id]) attachTo(id, `tok:${k}`); }, 0); return; }
@@ -3266,6 +3276,36 @@ function startController(code, pid) {
       const text = m[2].replace(/\bthat many\b/gi, String(d.dmg)).replace(/\b(that source|that creature|that permanent)\b/gi, who).replace(/\breturn it\b/i, `return ${who}`).replace(/\bdestroy it\b/i, `destroy ${who}`).replace(/^\w/, c => c.toUpperCase());
       reminders.push(normalizeRem({ id: newId(), src: dispName(x), srcId: sid, text, times: 1, note: `${who} dealt you ${d.dmg} damage.` }));
     }));
+  }
+  // Arwen, Elminster, Matoya: "whenever you scry / surveil" — fired when a reminder that scries or surveils is done
+  function scryDone(r) {
+    const m = String(r.text || "").match(/\b(scry|surveil) (\d+|x|one|two|three|four|five)\b/i); if (!m) return;
+    const n = ({ x: 1, one: 1, two: 2, three: 3, four: 4, five: 5 })[m[2].toLowerCase()] || Number(m[2]) || 1, kind = m[1].toLowerCase();
+    if (!Object.values(me.bf || {}).some(x => /^(?:[^—\n]{1,40} — )?whenever you (?:scry|surveil|scry or surveil)\b/im.test(x.o || lookupCard(x.n)?.o || ""))) return;
+    setTimeout(() => act([{ type: "scry", kind, n }]), 0);
+  }
+  // Monstrosity N: counters, it becomes monstrous (once), and "When this creature becomes monstrous" fires
+  function monstrosity(id, ab) {
+    const e = me.bf?.[id]; if (!e) return false;
+    const m = String(ab.text || "").match(/^Monstrosity (\d+|X)\.?$/i); if (!m) return false;
+    const name = dispName(e);
+    if (e.monstrous) { logTo(code, `${me.name}'s ${name} is already monstrous: Monstrosity does nothing (the mana is still spent)`); toast(`${name} is already monstrous`); return true; }
+    const n = /x/i.test(m[1]) ? Math.max(0, Math.floor(Number(prompt(`${name}: Monstrosity X — what was X?`, "1")) || 0)) : Number(m[1]);
+    mutate(p => { const x = p.bf?.[id]; if (x) { x.monstrous = true; x.c ||= {}; x.c.p1p1 = (x.c.p1p1 || 0) + n; } });
+    logTo(code, `👹 ${me.name}'s ${name} became monstrous (+${n} +1/+1)`);
+    const short = e.n.split(",")[0].split(" // ")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const w = String(e.o || lookupCard(e.n)?.o || "").match(new RegExp(`^When (?:this creature|${short}) becomes monstrous, ([^\\n]+)$`, "im"));
+    if (w) { const tx = w[1].replace(/\bX\b/g, String(n)), sp = spellAbility({ n: `${e.n} · monstrous`, t: "Instant", o: tx[0].toUpperCase() + tx.slice(1) });
+      if (sp.auto && sp.effs.length) act([{ type: "effects", effs: sp.effs, times: 1, count: 1, src: name, srcId: id }]); else reminders.push(normalizeRem({ id: newId(), src: name, srcId: id, text: tx[0].toUpperCase() + tx.slice(1), times: 1 })); }
+    render(); return true;
+  }
+  // Exert: "You may exert this creature as it attacks. When you do, …" and "Whenever you exert a creature" (Battlefield Scavenger)
+  function exertCheck(id) {
+    const e = me.bf?.[id]; if (!e) return;
+    const o = String(e.o || lookupCard(e.n)?.o || ""), m = o.match(/You may exert [^.]+? as it attacks\. When you do, ([^\n]+)/i);
+    if (!m && !/You may exert [^.]+ as it attacks/i.test(o)) return;
+    const also = Object.entries(me.bf || {}).filter(([, x]) => /^whenever you exert a creature, /im.test(x.o || lookupCard(x.n)?.o || "")).map(([, x]) => `${dispName(x)}: ${String(x.o || lookupCard(x.n)?.o || "").match(/^whenever you exert a creature, ([^\n]+)/im)[1]}`);
+    reminders.push({ id: newId(), src: dispName(e), srcId: id, text: `You may exert ${dispName(e)} (it won't untap during your next untap step).${m ? ` If you do: ${m[1]}` : ""}${also.length ? ` Also: ${also.join(" ")}` : ""}`, times: 1, exert: { id } });
   }
   function exaltedCheck(who) {
     if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted && !r.alone); return; } // a second attacker: not alone
@@ -5920,6 +5960,7 @@ function startController(code, pid) {
     const o = c.o || "";
     if (/^Transmute\b/m.test(o)) out.push({ kind: "transmute", label: "Transmute" });
     if (c.faces?.length > 1 && /^(modal_dfc|adventure)$/.test(c.layout || "")) out.push({ kind: "backFace", label: `${c.layout === "adventure" ? "Adventure: " : "▶ "}${c.faces[1].n}` });
+    if (isRoomCard(c)) out.push({ kind: "door2", label: `🚪 ${c.faces[1].n} ${c.faces[1].m || ""}` });
     if (suspendOf(c)) out.push({ kind: "suspend", label: `Suspend ${suspendOf(c).time}` });
     { const em = o.match(/^Exile this card from your hand: Add ((?:\{[^}]+\})+)\.?$/m); if (em) out.push({ kind: "exileMana", label: `Exile: add ${em[1]}`, syms: em[1] }); }
     { const wp = o.match(/^Warp ((?:\{[^}]+\})+)/m); if (wp) out.push({ kind: "warp", label: `Warp ${wp[1]}`, cost: wp[1] }); }
@@ -5978,6 +6019,7 @@ function startController(code, pid) {
       setTimeout(() => { const id = Object.keys(me.bf || {}).reverse().find(k => me.bf[k].n === c.n && me.bf[k].impT); if (id) mutate(p => { const x = p.bf?.[id]; if (x) { x.c ||= {}; x.c.time = h.n; } }); }, 120); return; }
     if (h.kind === "dash") { if (!okToCast(c)) return; logTo(code, `${me.name} cast ${name} for its dash cost ${h.cost} (haste; back to hand at end step)`); playCard(c, { dash: true, altCost: h.cost }); return; }
     if (h.kind === "warp") { if (!okToCast(c)) return; logTo(code, `${me.name} cast ${name} for its warp cost ${h.cost} (exiled at the next end step; castable later)`); playCard(c, { warp: true, altCost: h.cost }); return; }
+    if (h.kind === "door2") { const rc = roomCard(c, [false, true], 1); if (okToCast(rc)) playCard(rc); return; }
     if (h.kind === "backFace") { const fc = faceCard(c, 1); if (fc && (/\bLand\b/.test(fc.t || "") || okToCast(fc))) playCard(fc); return; }
     if (h.kind === "foretell") { // pay {2}, exile it face down; cast it on a later turn for its foretell cost
       act([], p => { p.ex ||= {}; p.ex[newId()] = { n: c.n, t: c.t || "", m: c.m || "", img: c.img || "", ...(c.o ? { o: c.o } : {}), foretold: { cost: h.cost, turnNo: room.turnNo || 0 }, at: Date.now() }; });
@@ -5997,7 +6039,7 @@ function startController(code, pid) {
     if (h.kind === "cycle") {
       logTo(code, `${me.name} cycled ${name}`);
       reminders.push({ id: newId(), src: name, text: "Draw a card.", times: 1 });
-      { Object.entries(me.bf || {}).forEach(([wid, w]) => { const am = String(w.o || lookupCard(w.n)?.o || "").match(/^whenever you cycle (?:another|a) card, ([^\n]+)$/im); if (am) reminders.push(normalizeRem({ id: newId(), src: dispName(w), srcId: wid, text: `You cycled ${name}: ${am[1]}`, times: 1 })); }); } // "whenever you cycle a card" ("cycle or discard" runs as a discard: cycling discards the card)
+      { Object.entries(me.bf || {}).forEach(([wid, w]) => { const am = String(w.o || lookupCard(w.n)?.o || "").match(/^whenever (?:you cycle (?:another|a)|a player cycles a) card, ([^\n]+)$/im); if (am) reminders.push(normalizeRem({ id: newId(), src: dispName(w), srcId: wid, text: `You cycled ${name}: ${am[1]}`, times: 1 })); }); } // "whenever you cycle a card" ("cycle or discard" runs as a discard: cycling discards the card)
       { const wc = String(c.o || "").match(/^When you (?:cast or )?cycle (?:this card|[^,\n]+), ([^\n]+)$/m); if (wc) { let tx = wc[1][0].toUpperCase() + wc[1].slice(1);
         if (/\bX\b/.test(tx) && /^(?:[A-Za-z]+)?cycling [^\n]*\{X\}/im.test(c.o || "")) { const x = Math.max(0, Math.floor(Number(prompt(`${name}: X paid for cycling = ?`, "1")) || 0)); tx = tx.replace(/,?\s*where X is [^.]+/i, "").replace(/\bX\b/g, String(x)); } // Shark Typhoon
         const sp = spellAbility({ n: `${c.n} (cycled)`, t: "Instant", o: tx }); if (sp.auto && sp.effs.length) act([{ type: "effects", effs: sp.effs, times: 1, count: 1, src: name }]); else reminders.push({ id: newId(), src: `${name} (cycled)`, text: tx, times: 1 }); } }
@@ -7205,6 +7247,7 @@ function startController(code, pid) {
     }
     const why = actBlocked(e);
     if (why && !confirm(`${name} can't use that ability:\n${why}\n\nUse it anyway?`)) return;
+    if (monstrosity(id, ab)) return;
     if (/put this (?:artifact|creature|permanent) on top of its owner's library/i.test(ab.text || "")) setTimeout(() => { if (!me.bf?.[id]) return; act([], p => { detachIn(p, id); delete p.bf[id]; }); logTo(code, `${me.name}: ${name} → top of library`); }, 50);
     if (/reveal cards from the top of your library until you reveal a basic land card\. put that card into your hand and all other cards revealed this way into your graveyard/i.test(ab.text || "")) {
       const v = prompt(`${name}: how many cards went to your graveyard?`, "5");
@@ -7499,6 +7542,8 @@ function startController(code, pid) {
           return abs.length ? `<div class="label">Activate${why ? ` <span class="cost-tag no">⛔ ${esc(why.split(":")[0])}</span>` : ""}</div><div class="abilities">${abs.map((ab, i) =>
             `<button class="btn small ability ${why ? "blocked" : ""}" data-a="activate" data-id="${id}" data-i="${i}" ${sickNow && ab.costs?.tap ? `disabled title="Summoning sick: {T} abilities can't be used until your next turn"` : ""}>${sickNow && ab.costs?.tap ? "💤 " : ""}${ab.powerMana ? `${abCostHtml(ab.cost)}<span class="ab-sep">:</span> add ${Math.max(0, Number(String(ptOf({ ...e, o: e.o || lookupCard(e.n)?.o }, countsFor(me), pid, id) || "0").split("/")[0]) || 0)} mana (${ab.powerMana.cols.map(c => manaHtml(`{${c}}`)).join(" / ")}) <span class="mini">= its power</span>` : ab.manaPer && !ab.manaPer.devotion ? `${ab.costs.tap ? "Tap: " : ""}add ${manaHtml(ab.manaPer.syms)} × ${countTypes(me, ab.manaPer.types)}` : /^[+−-]?(\d+|X)$/.test(ab.cost || "") ? esc(ab.label) : `${abCostHtml(ab.cost)}<span class="ab-sep">:</span> ${esc(ab.label)}`}</button>`).join("")}</div>` : "";
         })()}
+        ${(() => { const c = e.room && (deckCard(e.n) || lookupCard(e.n)); if (!c || !isRoomCard(c)) return ""; const locked = c.faces.map((f, i) => [f, i]).filter(([, i]) => !e.room.u[i]);
+          return locked.length ? `<div class="abilities">${locked.map(([f, i]) => `<button class="btn small ability" data-a="room-unlock" data-id="${id}" data-i="${i}">🔓 Unlock ${esc(f.n)} ${manaHtml(f.m || "")}</button>`).join("")}</div>` : `<div class="mini">Both doors unlocked</div>`; })()}
         ${(() => { const c = lookupCard(e.n), wr = c && winRule(c); return wr ? `<button class="btn small ability" data-a="win-manual" data-id="${id}">🏆 Win condition met: declare win</button>` : ""; })()}
         ${(() => { const c = { ...e, o: e.o || lookupCard(e.n)?.o, t: e.t || lookupCard(e.n)?.t }; const ec = equipCost(c), en = enchantType(c); if (!ec && !en) return "";
           const opts = attachTargets(ec ? "creature" : en).filter(([v]) => v !== `bf:${id}`);
@@ -7680,6 +7725,11 @@ function startController(code, pid) {
         break;
       }
       case "move": moveOut(b.dataset.id, b.dataset.dest); break;
+      case "room-unlock": { const id = b.dataset.id, i = Number(b.dataset.i), e = me.bf?.[id], c = e && (deckCard(e.n) || lookupCard(e.n)); if (!e?.room || !isRoomCard(c) || e.room.u[i]) break;
+        const u = e.room.u.map((x, k) => x || k === i), rc = roomCard(c, u);
+        mutate(p => { const x = p.bf?.[id]; if (x) { x.room = rc.room; x.o = rc.o; x.mode = rc.mode; } });
+        logTo(code, `🔓 ${me.name} unlocked ${c.faces[i].n} (${c.faces[i].m || "free"})`);
+        act([{ type: "unlock", id, door: c.faces[i].n.toLowerCase() }, ...(u.every(Boolean) ? [{ type: "fullUnlock", id }] : [])]); render(); break; }
       case "start": update(ref(db, `rooms/${code}`), { turn: pid, turnNo: (room.turnNo || 0) + 1, round: 1, firstSeat: me.seat ?? 0 }); logTo(code, `${me.name} goes first`); break;
       case "step-next": {
         if (room.turn !== pid) break;
@@ -10334,6 +10384,7 @@ function startController(code, pid) {
       }
       case "rem-dismiss": {
         const r = reminders.find(x => x.id === b.dataset.id);
+        if (r && !r.effs?.length) scryDone(r);
         if (r?.digBack && dig?.on) { dig.hand.push(r.digBack); digSave(); setTimeout(renderHand, 0); toast(`${r.src} went back to your hand`); } // ninjutsu / mutate not used after all
         if (r) clearWindow(r);
         const dm = r && !r.effs?.length && !r.punish && r.text.match(/^(?:you )?draw (a|one|two|three|\d+) cards?\.?$/i);
@@ -10347,6 +10398,7 @@ function startController(code, pid) {
       case "rem-apply":
       case "rem-pick": {
         const r = reminders.find(x => x.id === b.dataset.id);
+        if (r) scryDone(r);
         reminders = reminders.filter(x => x.id !== b.dataset.id);
         const effs = r && (b.dataset.a === "rem-pick" ? [r.effs[Number(b.dataset.i)]] : r.effs);
         if (r) act([{ type: "effects", effs, times: r.times, count: r.count, src: r.src, srcId: r.srcId }]);

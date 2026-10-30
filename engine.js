@@ -672,6 +672,9 @@ function parseCond(cond, cardName) {
   const short = cardName.split("#")[0].split(" // ")[0].split(",")[0].toLowerCase();
   if (/^(?:this land|[a-z ,'-]+?) or another land you control enters$/.test(c)) return { ev: "land" };
   if (/^the ring tempts you$/.test(c)) return { ev: "tempt" };
+  if (/^you fully unlock a room$/.test(c)) return { ev: "fullUnlock" }; // Eerie
+  { const sc = c.match(/^you (scry or surveil|surveil or scry|scry|surveil)$/); if (sc) return { ev: "scry", kinds: sc[1].split(" or ") }; } // Arwen, Matoya (the app fires it when a scry or surveil reminder is done)
+  { const ul = c.match(/^you unlock (this door|.+)$/); if (ul) return { ev: "unlock", door: ul[1] === "this door" ? null : ul[1] }; } // a Room's door (the app names each door on the battlefield)
   if (/^a creature token you control leaves the battlefield$/.test(c)) return { ev: "tokleave", once: false };
   if (/^you attack$/.test(c) || /^you attack (?:a player|one or more players|an opponent|one or more opponents)$/.test(c) || /^one or more creatures attack$/.test(c)) return { ev: "youattack" };
   if (/^you gain life$/.test(c)) return { ev: "gainlife" };
@@ -794,8 +797,9 @@ const abCache = new Map();
 // After refreshing card text from Scryfall, forget what was parsed before
 export function clearAbilityCaches() { abCache.clear(); spellCache.clear(); actCache.clear(); }
 export const abilitiesOf = card => {
-  if (!abCache.has(card.n)) abCache.set(card.n, parseAbilities(card));
-  return abCache.get(card.n);
+  const k = `${card.n}\u0001${card.o || ""}`; // same name, different text (a Room's unlocked doors, a chosen mode): parsed separately
+  if (!abCache.has(k)) abCache.set(k, parseAbilities(card));
+  return abCache.get(k);
 };
 
 // Parse a card's rules text once into triggers, replacement effects and P/T rules
@@ -827,6 +831,8 @@ export function kwExpand(o) {
     .replace(/^(When|Whenever) ([^,\n]+?) enters or (dies|becomes tapped|leaves the battlefield), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\n${w} ${who} ${b}, ${e}`)
     // "Whenever Carth enters or a planeswalker you control dies", "Jerren enters or another nontoken Human you control dies": two triggers, one effect
     .replace(/^(When|Whenever) ([^,\n]+?) enters or ((?:a|an|another) [^,\n]+? dies), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\nWhenever ${b}, ${e}`)
+    // Eerie: "Whenever an enchantment you control enters and whenever you fully unlock a Room, …": two triggers, one effect
+    .replace(/^((?:[^—\n]{1,40} — )?)(Whenever [^,\n]+?) and whenever ([^,\n]+), ([^\n]+)/gm, (_, pre, a, b, e) => `${pre}${a}, ${e}\nWhenever ${b}, ${e}`)
     // "When this artifact enters and when you sacrifice it, …" (Carrot Cake, Heaped Harvest)
     .replace(/^(When this [a-z]+ enters) and (when you sacrifice it), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\nWhen you sacrifice it, ${e}`)
     // "Whenever Millicent or another nontoken Spirit you control dies or deals combat damage to a player, …"
@@ -988,7 +994,7 @@ export function parseAbilities(card) {
   return out;
 }
 
-const COND_LABEL = {
+const COND_LABEL = { scry: "when you scry or surveil", unlock: "when you unlock this door", fullUnlock: "when you fully unlock a Room",
   phase: "at the start of a phase", oppcast: "when an opponent casts", oppdraw: "when an opponent draws", "self-etb": "when it enters/attacks", tokens: "when you create tokens", sac: "when you sacrifice",
   land: "landfall", creature: "when a creature enters", tempt: "when the Ring tempts you", ringbearer: "when you choose a Ring-bearer", cast: "when you cast", dies: "when a creature dies",
   selfdies: "when it dies", selfsac: "when you sacrifice it", selftap: "when it becomes tapped", youdraw: "when you draw", gainlife: "when you gain life", discard: "when you discard",
@@ -1204,6 +1210,9 @@ function matches(cond, ev, srcId) {
     case "creature_old":
       return 0;
     case "tempt": return ev.type === "tempt" ? 1 : 0;
+    case "unlock": return ev.type === "unlock" && ev.id === srcId && (!cond.door || cond.door === ev.door) ? 1 : 0;
+    case "fullUnlock": return ev.type === "fullUnlock" ? 1 : 0;
+    case "scry": return ev.type === "scry" && cond.kinds.includes(ev.kind) ? 1 : 0;
     case "discard": return ev.type === "discard" && turnOk(cond) ? discardCount(cond, ev) : 0;
     case "oppdiscard": return ev.type === "oppdiscard" || (cond.anyP && ev.type === "discard") ? discardCount(cond, ev) : 0;
     case "selftap": return ev.type === "tapped" && ev.id === srcId ? 1 : 0;
