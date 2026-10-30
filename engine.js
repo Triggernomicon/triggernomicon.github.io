@@ -695,17 +695,17 @@ function parseCond(cond, cardName) {
   if (/^you put one or more -1\/-1 counters on a creature$/.test(c)) return { ev: "m1m1put" };
   if (/^(?:one or more |a )?-1\/-1 counters? (?:is|are) put on (?:a|one or more) creatures?$/.test(c)) return { ev: "m1m1put", check: true, askNote: "Fires on -1/-1 counters you put with the app; add any others by hand." }; // Flourishing Defenses, Wickersmith's Tools (your own counters; others' by hand)
   if (/^you discard (a|one or more) cards?$/.test(c)) return { ev: "discard", once: /one or more/.test(c) };
-  if (/^you discard one or more cards for the first time each turn$/.test(c)) return { ev: "discard", once: true, check: true, askNote: "Only the first time you discard this turn." }; // Rielle
-  { const dk = c.match(/^you discard (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (dk) return { ev: "discard", once: false, check: true, askNote: `Only if you discarded a ${dk[1]} card.` }; } // Bone Miser, Surly Badgersaur: the app doesn't know which card
+  if (/^you discard one or more cards for the first time each turn$/.test(c)) return { ev: "discard", once: true, firstTurn: true }; // Rielle
+  { const dk = c.match(/^you discard (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (dk) return { ev: "discard", once: false, dType: dk[1], askIfUnknown: `Only if you discarded a ${dk[1]} card.` }; } // Bone Miser, Surly Badgersaur: the app doesn't know which card
   if (/^you cycle or discard (?:another|a) card$/.test(c)) return { ev: "discard", once: false }; // Archfiend of Ifnir (cycling is caught where you cycle)
   if (/^an opponent discards (a|one or more) cards?$/.test(c)) return { ev: "oppdiscard", once: /one or more/.test(c) };
-  { const od = c.match(/^an opponent discards (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (od) return { ev: "oppdiscard", once: false, check: true, askNote: `Only if they discarded a ${od[1]} card.` }; } // Waste Not
+  { const od = c.match(/^an opponent discards (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (od) return { ev: "oppdiscard", once: false, dType: od[1], askIfUnknown: `Only if they discarded a ${od[1]} card.` }; } // Waste Not
   if (/^(?:a player discards (?:a|one or more) cards?|one or more players discard one or more cards)$/.test(c)) return { ev: "oppdiscard", anyP: true, once: /one or more/.test(c) }; // Tinybones, Hostile Investigator
-  { const yd = c.match(/^you discard one or more ((?:non)?[a-z]+) cards(?: for the first time each turn)?$/); if (yd) return { ev: "discard", once: true, check: true, askNote: `Only if you discarded a ${yd[1]} card${/first time/.test(c) ? ", the first time this turn" : ""}.` }; } // Urza, Mishra
+  { const yd = c.match(/^you discard one or more ((?:non)?[a-z]+) cards(?: for the first time each turn)?$/); if (yd) return { ev: "discard", once: true, dType: yd[1], askIfUnknown: `Only if you discarded a ${yd[1]} card.`, ...(/first time/.test(c) ? { firstTurn: true } : {}) }; } // Urza, Mishra
   { const gl = c.match(/^(?:one or more ([a-z ,/-]+?) cards leave|one or more cards leave|a card leaves) your graveyard( during your turn)?$/); if (gl && (gl[1] || gl[2])) return { ev: "gyleave", check: true, askNote: `Only ${[gl[1] ? `if a ${gl[1].replace(/\band\/or\b/g, "or")} card left` : "", gl[2] ? "during your turn" : ""].filter(Boolean).join(", ")}.` }; } // Desecrated Tomb, Kheru Goldkeeper
-  if (/^you gain life (?:for the first time )?during (?:your turn|each of your turns)$/.test(c) || /^you gain or lose life during your turn$/.test(c)) return { ev: "gainlife", ...(/first time/.test(c) ? { first: true } : {}), check: true, askNote: `Only during your turn${/or lose/.test(c) ? " (losing life counts too: add that by hand)" : ""}.` }; // Cat Collector, Wax-Wane Witness
-  if (/^you draw a card during an opponent's turn$/.test(c)) return { ev: "youdraw", check: true, askNote: "Only during an opponent's turn." }; // The Watcher in the Water
-  if (/^you commit a crime during your turn$/.test(c)) return { ev: "crime", check: true, askNote: "Only during your turn." };
+  if (/^you gain life (?:for the first time )?during (?:your turn|each of your turns)$/.test(c) || /^you gain or lose life during your turn$/.test(c)) return { ev: "gainlife", ...(/first time/.test(c) ? { first: true } : {}), turn: "mine", askIfUnknown: "Only during your turn.", ...(/or lose/.test(c) ? { check: true, askNote: "Also when you lose life during your turn: use it then by hand." } : {}) }; // Cat Collector, Wax-Wane Witness
+  if (/^you draw a card during an opponent's turn$/.test(c)) return { ev: "youdraw", turn: "opp", askIfUnknown: "Only during an opponent's turn." }; // The Watcher in the Water
+  if (/^you commit a crime during your turn$/.test(c)) return { ev: "crime", turn: "mine", askIfUnknown: "Only during your turn." };
   if (c === `${short} dies` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} dies` || /^this (creature|permanent|vehicle) dies$/.test(c)) return { ev: "selfdies" };
   if (/^you sacrifice (?:this (?:creature|aura|artifact|enchantment|permanent|equipment|vehicle|land)|it)$/.test(c) || c === `you sacrifice ${short}`) return { ev: "selfsac" };
   if (/^you choose a creature as your ring-bearer$/.test(c)) return { ev: "ringbearer" };
@@ -1162,7 +1162,13 @@ export function countTypes(p, types, excludeId) {
   return cards + toks;
 }
 
+// Set by matches() when a condition depends on something the event doesn't say (which card was discarded, whose turn it is): the trigger then asks instead of applying
+let condUnknown = false, curMyTurn = null;
+const turnOk = cond => { if (!cond.turn) return true; if (curMyTurn == null) { condUnknown = true; return true; } return cond.turn === "mine" ? curMyTurn : !curMyTurn; };
+const typeFits = (t, phrase) => String(phrase).split(/,? or /).some(alt => alt.split(/,\s*|\s+/).filter(Boolean).every(w => /^non-?/.test(w) ? !new RegExp(`\\b${w.replace(/^non-?/, "")}\\b`, "i").test(t || "") : new RegExp(`\\b${w}\\b`, "i").test(t || "")));
+const discardCount = (cond, ev) => { if (!cond.dType) return cond.once ? 1 : ev.n || 1; if (!ev.ts) { condUnknown = true; return cond.once ? 1 : ev.n || 1; } const n = ev.ts.filter(t => typeFits(t, cond.dType)).length; return cond.once ? (n ? 1 : 0) : n; };
 function matches(cond, ev, srcId) {
+  condUnknown = false;
   switch (cond.ev) {
     case "self-etb":
       if (ev.id !== srcId) return 0;
@@ -1198,11 +1204,11 @@ function matches(cond, ev, srcId) {
     case "creature_old":
       return 0;
     case "tempt": return ev.type === "tempt" ? 1 : 0;
-    case "discard": return ev.type === "discard" ? (cond.once ? 1 : ev.n || 1) : 0;
-    case "oppdiscard": return ev.type === "oppdiscard" || (cond.anyP && ev.type === "discard") ? (cond.once ? 1 : ev.n || 1) : 0;
+    case "discard": return ev.type === "discard" && turnOk(cond) ? discardCount(cond, ev) : 0;
+    case "oppdiscard": return ev.type === "oppdiscard" || (cond.anyP && ev.type === "discard") ? discardCount(cond, ev) : 0;
     case "selftap": return ev.type === "tapped" && ev.id === srcId ? 1 : 0;
     case "youattack": return ev.type === "youattack" ? 1 : 0;
-    case "gainlife": return ev.type === "gainlife" && (!cond.first || ev.first) ? 1 : 0;
+    case "gainlife": return ev.type === "gainlife" && (!cond.first || ev.first) && turnOk(cond) ? 1 : 0;
     case "gyleave": return ev.type === "gyleave" ? 1 : 0;
     case "mutates": return ev.type === "mutates" && ev.id === srcId ? 1 : 0;
     case "expend": return ev.type === "expend" && ev.prev < cond.n && ev.n >= cond.n ? 1 : 0;
@@ -1239,6 +1245,9 @@ function matches(cond, ev, srcId) {
       return ok ? (cond.once ? 1 : ev.n) : 0;
     }
     case "dies": {
+      if ((ev.type === "gy" || ev.type === "sac") && !ev.creature && cond.types?.length && cond.types.every(w => /^(planeswalker|battle)$/.test(w))) { // Carth: "a planeswalker you control dies"
+        if (ev.foreign ? cond.mine : cond.opp) return 0;
+        const n = cond.types.some(w => new RegExp(`\\b${w}\\b`, "i").test(ev.t || "")) && !(cond.other && ev.ids?.includes(srcId)) ? ev.n || 1 : 0; return cond.once ? (n ? 1 : 0) : n; }
       if (ev.type !== "dies") return 0;
       if (ev.foreign && cond.mine) return 0; // another player's creature: "creature you control" doesn't see it
       if (cond.opp && !ev.foreign) return 0; // "a creature an opponent controls dies" (The Meathook Massacre)
@@ -1258,7 +1267,7 @@ function matches(cond, ev, srcId) {
         if (cond.nontoken && ev.token) return 0;
         if (ev.ts) n = ev.ts.filter((t, i) => cond.types.some(w => isT(t, w)) && !(cond.other && ev.ids?.[i] === srcId)).length * (ev.token && ev.ts.length === 1 ? ev.n || 1 : 1);
         else n = cond.types.some(w => w === "creature" || w === "permanent" || (ev.name && isT(ev.name, w))) ? (cond.other && ev.ids?.includes(srcId) ? (ev.n || 1) - 1 : ev.n || 1) : 0;
-      } else if (ev.type === "sac" && !ev.creature) { // a creature that's sacrificed also dies: counted there
+      } else if ((ev.type === "sac" || ev.type === "gy") && !ev.creature) { // a creature that's sacrificed also dies: counted there; "gy": a noncreature destroyed or moved to the graveyard
         if (ev.foreign ? cond.mine : cond.opp) return 0;
         if ((cond.nontoken && ev.token) || (cond.other && ev.ids?.includes(srcId))) return 0;
         const t = ev.t || (ev.token ? tokenPerm({ name: ev.name }).t : "");
@@ -1271,7 +1280,7 @@ function matches(cond, ev, srcId) {
         && (cond.whose === "each" || (cond.whose === "your" && ev.mine) || (cond.whose === "opp" && !ev.mine)) ? 1 : 0;
     case "counters":
       return ev.type === "counters" ? (cond.once ? 1 : ev.n || 1) : 0;
-    case "crime": return ev.type === "crime" ? 1 : 0;
+    case "crime": return ev.type === "crime" && turnOk(cond) ? 1 : 0;
     case "heroic": return 0;
     case "m1m1put": return ev.type === "m1m1put" ? ev.creatures || 1 : 0; // one trigger per creature; ev.n = counters on each
     case "typedAtk": {
@@ -1282,7 +1291,7 @@ function matches(cond, ev, srcId) {
     case "tokOrSac": return ev.type === "tokens" ? 1 : ev.type === "sac" && ev.token && !ev.foreign ? (ev.n || 1) : 0;
     case "playOrCast": return (ev.type === "cast" && !ev.foreign) || (ev.type === "enters" && ev.played) ? 1 : 0;
     case "youdraw": {
-      if (ev.type !== "draw") return 0;
+      if (ev.type !== "draw" || !turnOk(cond)) return 0;
       if (cond.nth) { const b = ev.before || 0; return b < cond.nth && b + (ev.n || 1) >= cond.nth ? 1 : 0; }
       return Math.max(0, (ev.n || 1) - (cond.exceptFirst && ev.step ? 1 : 0));
     }
@@ -1334,8 +1343,8 @@ export function stationCard(c, e) {
   const ch = e?.c?.charge || 0;
   return { ...c, n: `${c.n}#st${ch}`, o: String(c.o || "").replace(/^(\d+)\+ \| (.*)$/gm, (m, n, rest) => ch >= Number(n) ? rest : "").replace(/\n{2,}/g, "\n") };
 }
-export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, turnNo = null, cz = [] }) {
-  curP = p;
+export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, turnNo = null, cz = [], myTurn = null }) {
+  curP = p; curMyTurn = myTurn;
   if (turnNo != null) ctx.turnNo = turnNo;
   const lost = e => (env?.loseAll || []).some(r => permanentMatches(e, r.filter));
   const sources = () => Object.entries(p.bf || {}).map(([id, e]) => {
@@ -1751,6 +1760,9 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if ((t.lvl || 1) > (s.e.lvl || 1)) continue; // a Class level not reached yet
         let times = matches(t.cond, evx, s.id);
         if (!times) continue;
+        const unk = condUnknown && t.cond.askIfUnknown;
+        if (t.cond.firstTurn) { const k = `${s.id}:${ti}:first`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; } // Rielle, Veronica: "for the first time each turn"
+        if (unk && t.auto) { ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times, effs: t.effs, count: evx.n || 1, note: t.cond.askIfUnknown }); continue; }
         if (t.effs?.some(f => f.n?.spellMv)) t = { ...t, effs: t.effs.map(f => f.n?.spellMv ? { ...f, n: manaValue(evx.card?.m || "") } : f) }; // Ovika: X = that spell's mana value
         if (t.onceTurn) { const k = `${s.id}:${ti}`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; }
         if (t.cond.ifGained && p.lifeGained !== ctx.turnNo) continue;
@@ -1787,7 +1799,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
           for (let i = 0; i < Math.min(times, 20); i++) ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times: 1, punish: t.punish, who: ev.by || null });
         } else {
           const epw = () => { const x = evx.id && p.bf?.[evx.id]; if (x) return (Number(x.p) || 0) + (x.c?.p1p1 || 0) - (x.c?.m1m1 || 0); return Number((String(evx.list?.[0]?.desc || "").match(/^(\d+)\//) || [])[1]) || 0; };
-          ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times, effs: (t.effs || []).map(f => f.k === "ping" && f.n?.enterPow ? { ...f, n: epw() } : f.k === "ping" && f.n?.evAmt ? { ...f, n: evx.amt || 1 } : f), count, choice: t.choice, modes: t.modes, pick: t.pick, ...(evx.type === "gainlife" ? { evN: evx.n } : {}), ...(t.note ? { note: t.note } : {}), who: ev.by || ev.active || null,
+          ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times, effs: (t.effs || []).map(f => f.k === "ping" && f.n?.enterPow ? { ...f, n: epw() } : f.k === "ping" && f.n?.evAmt ? { ...f, n: evx.amt || 1 } : f), count, choice: t.choice, modes: t.modes, pick: t.pick, ...(evx.type === "gainlife" ? { evN: evx.n } : {}), ...(unk ? { note: t.cond.askIfUnknown } : t.note ? { note: t.note } : {}), who: ev.by || ev.active || null,
             ...(ev.type === "oppcast" && /same mana value/i.test(t.text) ? { sameMv: { mv: manaValue(ev.card?.m || ""), name: ev.card?.n } } : {}),
             ...(/where X is that spell's mana value/i.test(t.text) && ev.card ? { xVal: manaValue(ev.card.m || ""), xWhy: `${ev.card.n}'s mana value` } : {}),
             ...(t.effs?.some(f => f.k === "copySpell") && ev.card ? { evCard: ev.card } : {}),

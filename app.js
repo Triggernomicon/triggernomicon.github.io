@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261030a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030a";
+import { firebaseConfig } from "./config.js?v=20261030b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -788,10 +788,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.30a";
+const APP_VERSION = "2026.10.30b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -1684,7 +1684,7 @@ function startController(code, pid) {
     events.forEach((ev, i) => { if (ev.type !== "dies" || ev.ts) return;
       if (ev.ids?.length) ev.ts = ev.ids.map(id => (me.bf?.[id] || bfBefore?.[id])?.t || "");
       else if (ev.token) { const sac = events.slice(0, i).reverse().find(x => x.type === "sac" && x.token && x.name), nm = sac?.name || ev.name; if (nm) ev.ts = [tokenPerm(Object.values(me.tokens || {}).find(t => t.name === nm) || { name: nm }).t]; } });
-    mutate(p => { const b4 = tokTally(p); if (pre) pre(p); runEvents(p, events, ctx, { enabled: auto, lookup: lookupCard, env: boardEnv(), turnNo: room?.turnNo || 0, cz: deck?.cmds || [] }); if (post) post(p); const af = tokTally(p); tokGone = Object.entries(b4).reduce((a, [n, c]) => a + Math.max(0, c - (af[n] || 0)), 0);
+    mutate(p => { const b4 = tokTally(p); if (pre) pre(p); runEvents(p, events, ctx, { enabled: auto, lookup: lookupCard, env: boardEnv(), turnNo: room?.turnNo || 0, cz: deck?.cmds || [], myTurn: room?.turn ? room.turn === pid : null }); if (post) post(p); const af = tokTally(p); tokGone = Object.entries(b4).reduce((a, [n, c]) => a + Math.max(0, c - (af[n] || 0)), 0);
       Object.entries(af).forEach(([n, c]) => { const g = c - (b4[n] || 0); if (g > 0 && isCreatureToken(n)) { const tk = Object.values(p.tokens || {}).find(t => t.name === n), pt = String(tk?.desc || "").match(/(\d+)\/(\d+)/); if (pt) for (let q = 0; q < Math.min(g, 10); q++) enteredPT.push({ p: Number(pt[1]), t: Number(pt[2]) }); entered += g; enteredNames.push(`${g > 1 ? g + " " : ""}${n} token${g > 1 ? "s" : ""}`); } });
       Object.entries(p.bf || {}).forEach(([id, e]) => { if (!bfBefore[id] && /\b(Artifact|Creature)\b/.test(e.t || "") && !e.own && !e.tapped) untapEnt.push(e.nick || e.n); });
       Object.entries(p.bf || {}).forEach(([id, e]) => { if (!bfBefore[id] && /\bCreature\b/.test(e.t || "") && !e.own) { entered += 1; enteredNames.push(e.nick || e.n); enteredPT.push({ id, p: Number(e.p) || 0, t: Number(e.tg) || 0, ty: e.t || "" }); } }); }, !!opts.merge);
@@ -1704,12 +1704,12 @@ function startController(code, pid) {
     if (entered > 0) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => /whenever a creature an opponent controls enters/i.test(e.o || lookupCard(e.n)?.o || "")))
       .forEach(o => sendOrders({ [o.id]: {} }, { how: "oppEnters", n: entered, names: enteredNames.slice(0, 6) }));
     events.filter(ev => ev.type === "sac" && !ev.foreign).forEach(ev => tellTable("sac", { ev, n: ev.n || 1, what: ev.name, note: `sacrificed ${ev.token ? `${ev.n > 1 ? `${ev.n} ` : "a "}${ev.name} token${ev.n > 1 ? "s" : ""}` : ev.name}.` }));
-    { const gy = events.filter(ev => ev.type === "sac" && !ev.foreign && !ev.creature); // Disciple of the Vault, Kothophed: another player's noncreature permanent went to the graveyard
+    { const gy = events.filter(ev => (ev.type === "sac" || ev.type === "gy") && !ev.foreign && !ev.creature); // Disciple of the Vault, Kothophed: another player's noncreature permanent went to the graveyard
       if (gy.length) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => { const c = lookupCard(e.n) || e; return c?.o && abilitiesOf({ ...c, o: e.o || c.o }).trig.some(t => t.cond?.ev === "toGy" && !t.cond.mine); }))
-        .forEach(o => sendOrders({ [o.id]: {} }, { how: "foreignGy", list: gy.map(ev => ({ name: ev.name, n: ev.n || 1, token: !!ev.token, artifact: !!ev.artifact, t: ev.t || "" })).slice(0, 50) })); }
+        .forEach(o => sendOrders({ [o.id]: {} }, { how: "foreignGy", list: gy.map(ev => ({ name: ev.name, n: ev.n || 1, token: !!ev.token, artifact: !!ev.artifact, t: ev.t || (ev.token ? tokenPerm({ name: ev.name }).t : lookupCard(ev.name)?.t || "") })).slice(0, 50) })); }
     const disc = events.filter(ev => ev.type === "discard").reduce((a, ev) => a + (ev.n || 1), 0);
     if (disc) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => /whenever (?:an opponent discards|a player discards|one or more players discard)/i.test(e.o || lookupCard(e.n)?.o || "")))
-      .forEach(o => sendOrders({ [o.id]: {} }, { how: "oppDiscard", n: disc }));
+      .forEach(o => sendOrders({ [o.id]: {} }, { how: "oppDiscard", n: disc, ...(events.filter(ev => ev.type === "discard").every(ev => ev.ts?.length === (ev.n || 1)) ? { ts: events.filter(ev => ev.type === "discard").flatMap(ev => ev.ts).slice(0, 60) } : {}) }));
     const died = events.filter(ev => ev.type === "dies" && !ev.foreign).reduce((a, ev) => a + (ev.n || 1), 0);
     if (died) { const t = room?.turnNo || 0; setTimeout(() => mutate(p => { p.deaths = { t, n: (p.deaths?.t === t ? p.deaths.n || 0 : 0) + died }; }, true), 0); }
     if (died) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => { const c = lookupCard(e.n) || e; return c?.o && abilitiesOf({ ...c, o: e.o || c.o }).trig.some(t => (t.cond?.ev === "dies" || t.cond?.ev === "toGy") && !t.cond.mine); }))
@@ -4839,7 +4839,7 @@ function startController(code, pid) {
       reminders.push({ id: newId(), src: `${o.byName}'s ${o.src}`, text: "Search your library", fetch: searchOf("Search your library for a noncreature artifact card, put it onto the battlefield, then shuffle."), left: 1, times: 1, note: "Optional." });
       render(); return;
     }
-    if (o.how === "oppDiscard") { act([{ type: "oppdiscard", n: o.n || 1, by: o.by }]); return; }
+    if (o.how === "oppDiscard") { act([{ type: "oppdiscard", n: o.n || 1, by: o.by, ...(o.ts?.length === (o.n || 1) ? { ts: o.ts } : {}) }]); return; }
     if (o.how === "oppTrig") { const sid = me.bf?.[o.srcId]?.n === o.srcName ? o.srcId : Object.keys(me.bf || {}).find(k => me.bf[k].n === o.srcName); if (!sid) return;
       reminders.push(trigRem({ src: dispName(me.bf[sid]), srcId: sid, text: o.text, times: o.times || 1, note: o.note }, o.by, o.byName)); render(); return; }
     if (o.how === "dmgYou") { damagedMe({ dmg: o.n, combat: false, from: o.byName, src: o.src, type: o.type || "" }); render(); return; }
@@ -4914,7 +4914,7 @@ function startController(code, pid) {
       });
       return;
     }
-    if (o.how === "foreignGy") { act((o.list || []).map(x => ({ type: "sac", ...x, foreign: true }))); return; }
+    if (o.how === "foreignGy") { act((o.list || []).map(x => ({ type: "gy", ...x, foreign: true }))); return; }
     if (o.how === "foreignDies") { act([{ type: "dies", n: o.n, token: !!o.token, foreign: true, ...(o.ts?.length === o.n ? { ts: o.ts } : {}) }]); return; }
     if (o.how === "gyTake") { const g = Object.entries(me.gy || {}).find(([, x]) => x.n === o.name); if (g) { act([], p => { delete p.gy?.[g[0]]; }); logTo(code, `${o.name} left ${me.name}'s graveyard (${o.byName}'s ${o.src})`); } return; }
     if (o.how === "ctrClear") { const e = me.bf?.[o.id]; if (!e) return; act([], p => { if (p.bf[o.id]) delete p.bf[o.id].c; }); logTo(code, `${o.byName}'s ${o.src}: all counters removed from ${me.name}'s ${dispName(e)}`); return; }
@@ -4962,12 +4962,14 @@ function startController(code, pid) {
       try { goneP[id] = ptOf(e, countsFor(me), pid, id); } catch {}
       gone.push([id, e]);
       if (o.how === "destroy" && /\bCreature\b/.test(e.t || "")) events.push({ type: "dies", n: 1, token: false, ids: [id] });
+      else if (o.how === "destroy") events.push({ type: "gy", name: e.n, t: e.t || "", n: 1, token: false, artifact: /\bArtifact\b/.test(e.t || ""), ids: [id] });
     });
     Object.entries(tokHits).forEach(([k, n]) => {
       const t = me.tokens?.[k];
       if (!t) return;
       const cnt = Math.min(n, t.count);
       if (o.how === "destroy" && isCreatureToken(t.name)) events.push({ type: "dies", n: cnt, token: true, name: t.name });
+      else if (o.how === "destroy") events.push({ type: "gy", name: t.name, t: tokenPerm(t).t, n: cnt, token: true, artifact: /\bArtifact\b/.test(tokenPerm(t).t) });
     });
     if (o.how === "phase") {
       const toks = Object.entries(tokHits).filter(([k]) => me.tokens?.[k]);
@@ -5752,6 +5754,7 @@ function startController(code, pid) {
     const dies = (dest === "Graveyard" || dest === "Sacrificed") && creature;
     const events = [...(dest === "Sacrificed" ? [{ type: "sac", name: e.n, n: 1, token: false, creature, artifact: /\bArtifact\b/.test(e.t || ""), ids: [id] }] : []),
       ...(dies ? [{ type: "dies", n: 1, token: false, ids: [id] }] : []),
+      ...(dest === "Graveyard" && !creature ? [{ type: "gy", name: e.n, t: e.t || "", n: 1, token: false, artifact: /\bArtifact\b/.test(e.t || ""), ids: [id] }] : []), // Disciple of the Vault, Carth: a destroyed noncreature
       ...(!dies && dest !== "Battlefield" ? [{ type: "leaves", ids: [id], dest }] : [])]; // "when this leaves the battlefield" (Fiend Hunter, Lich's Mastery): exile, hand, or a noncreature to the graveyard
     act(events, null, p => { // it leaves after triggers check, so its own "when this dies" still fires
       delete p.bf[id];
@@ -5950,7 +5953,7 @@ function startController(code, pid) {
   // A card discarded from hand: graveyard (or exile with Necropotence-style effects)
   function discardFromHand(c) {
     const dx = boardEnv().discardExile[0];
-    act([{ type: "discard", n: 1 }], p => { toZone(p, { n: c.n, t: c.t || "", m: c.m || "", img: c.img || "", ...(c.o ? { o: c.o } : {}) }, dx ? "ex" : "gy", { disc: room.turnNo || 0 }); });
+    act([{ type: "discard", n: 1, ts: [c.t || lookupCard(c.n)?.t || ""] }], p => { toZone(p, { n: c.n, t: c.t || "", m: c.m || "", img: c.img || "", ...(c.o ? { o: c.o } : {}) }, dx ? "ex" : "gy", { disc: room.turnNo || 0 }); });
     return dx;
   }
   function useHandAbility(c, h) {
@@ -8825,7 +8828,7 @@ function startController(code, pid) {
         if (!c) break;
         const dx = b.dataset.why === "discarded" && boardEnv().discardExile[0];
         let mgid = null;
-        act(b.dataset.why === "discarded" ? [{ type: "discard", n: 1 }] : [], p => { mgid = toZone(p, c, dx ? "ex" : z, b.dataset.why === "discarded" ? { disc: room.turnNo || 0 } : undefined); });
+        act(b.dataset.why === "discarded" ? [{ type: "discard", n: 1, ts: [c.t || lookupCard(c.n)?.t || ""] }] : [], p => { mgid = toZone(p, c, dx ? "ex" : z, b.dataset.why === "discarded" ? { disc: room.turnNo || 0 } : undefined); });
         if (b.dataset.why === "milled" && !dx) setTimeout(() => libToGy([c], [mgid]), 0);
         logTo(code, `${me.name} ${b.dataset.why} ${dispName(c)}${dx ? ` → exiled (${dx.src})` : ""}`);
         break;
@@ -8900,7 +8903,7 @@ function startController(code, pid) {
         if (dig?.on && (k.toGy || !k.digLib)) { const z = k.toGy ? dig.hand : dig.lib; k.cards.forEach(c => { const j = z.indexOf(c.n); if (j >= 0) z.splice(j, 1); }); digSave(); setTimeout(() => { try { renderHand(); } catch {} }, 0); }
         if (k.toGy) {
           const dx = boardEnv().discardExile[0];
-          act([{ type: "discard", n: k.cards.length }], p => k.cards.forEach(c => toZone(p, c, dx ? "ex" : "gy", { disc: room.turnNo || 0 })));
+          act([{ type: "discard", n: k.cards.length, ts: k.cards.map(c => c.t || lookupCard(c.n)?.t || "") }], p => k.cards.forEach(c => toZone(p, c, dx ? "ex" : "gy", { disc: room.turnNo || 0 })));
           logTo(code, `${me.name} discarded ${k.cards.map(c => c.n).join(", ")} (${r.src})${dx ? ` → exiled (${dx.src})` : ""}`);
           zoneOpen.add("gy"); render(); break;
         }
@@ -10583,13 +10586,15 @@ function startController(code, pid) {
           const o = String(e.o || lookupCard(e.n)?.o || "");
           let m;
           if (added.length && (m = o.match(/whenever one or more land cards are put into your graveyard from anywhere, ([^.]+)\./i)) && added.some(g => /\bLand\b/.test(me.gy[g]?.t || ""))) fire.push([sid, e, m[1]]);
-          if (gone.length && (m = o.match(/whenever one or more cards leave your graveyard, ([^.]+)\./i))) fire.push([sid, e, m[1]]);
+          if (gone.length && (m = o.match(/whenever (?:one or more ([a-z ,/-]+?) cards leave|one or more cards leave|a card leaves) your graveyard( during your turn)?, ([^.]+)\./i))) { // Desecrated Tomb ("creature cards"), Kheru Goldkeeper ("during your turn")
+            const ok = (!m[1] || gone.some(g => m[1].split(/,? and\/or |,? or |, /).some(w => new RegExp(`\\b${singular(w.trim())}\\b`, "i").test(exSeen.gyT?.[g] || "")))) && (!m[2] || room.turn === pid);
+            if (ok && !(/this ability triggers only once each turn/i.test(o) && e.gyLeaveT === (room.turnNo || 0))) { if (/this ability triggers only once each turn/i.test(o)) mutate(p => { if (p.bf?.[sid]) p.bf[sid].gyLeaveT = room.turnNo || 0; }, true); fire.push([sid, e, m[3]]); } }
         });
         if (fire.length) setTimeout(() => { fire.forEach(([sid, e, fx]) => { const sp = spellAbility({ n: `${e.n} · gy · ${fx.slice(0, 40)}`, t: "Instant", o: fx[0].toUpperCase() + fx.slice(1) + "." }), toks = sp.effs.filter(f => f.k === "tok");
           if (toks.length) act([{ type: "effects", effs: toks, times: 1, count: 1, src: dispName(e), srcId: sid }]);
           else reminders.push(normalizeRem({ id: newId(), src: dispName(e), srcId: sid, text: fx[0].toUpperCase() + fx.slice(1) + ".", times: 1 })); }); render(); }, 0);
       }
-      exSeen = { ex: exNow, gyN: myGyN, gyIds };
+      exSeen = { ex: exNow, gyN: myGyN, gyIds, gyT: Object.fromEntries(gyIds.map(g => [g, me.gy[g]?.t || ""])) };
       { const tapNow = new Set(Object.entries(me.bf || {}).filter(([, e]) => e.tap).map(([id]) => id));
         if (tapSeen) {
           const freshT = [...tapNow].filter(id => !tapSeen.has(id) && me.bf[id]), freshU = [...tapSeen].filter(id => !tapNow.has(id) && me.bf?.[id]);
