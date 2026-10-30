@@ -736,7 +736,8 @@ function parseCond(cond, cardName) {
   if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) && !/^this (?:creature|permanent) or another\b/.test(c) };
   // Disciple of the Vault, Marionette Apprentice, the oil-counter cards: another permanent "is put into a graveyard from the battlefield" (destroyed or sacrificed);
   // the source's own trip ("this artifact is put into a graveyard") is handled where it leaves, so it isn't read here
-  { const tg = c.match(/^(a|an|another|one or more) (other )?(nontoken )?([a-z ,/'-]+?) ?(you control |you own |an opponent controls |your opponents control |owned by another player |)(?:is|are) put into (a|your|an opponent's) graveyard from the battlefield$/);
+  { const c2 = c.replace(/ or (?:is|are) put into exile from the battlefield$/, "").replace(/^this (?:artifact|creature|enchantment|permanent) or another /, "a "); // Slagstone Refinery: itself or another, graveyard or exile (exile isn't seen)
+    const tg = c2.match(/^(a|an|another|one or more) (other )?(nontoken )?([a-z ,/'-]+?) ?(you control |you own |an opponent controls |your opponents control |owned by another player |)(?:is|are) put into (a|your|an opponent's) graveyard from the battlefield$/);
     if (tg && !c.startsWith(short) && !/^(?:this|it)\b/.test(tg[4]) && c !== "a creature is put into your graveyard from the battlefield") { // Mortuary keeps its own rule below
       const own = tg[5].trim(), types = splitTypes(tg[4].replace(/\band\/or\b/g, "or").replace(/\bpermanents?\b/, "permanent"));
       return { ev: "toGy", types, nontoken: !!tg[3], other: tg[1] === "another" || !!tg[2], once: tg[1] === "one or more",
@@ -1329,7 +1330,13 @@ function matches(cond, ev, srcId) {
       if (cond.mvMax != null && manaValue(ev.card?.m || "") > cond.mvMax) return 0; // Eidolon of the Great Revel
       const t = ev.card.t || "", w = cond.what, COLS = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
       if (COLS[w]) return new RegExp(`\\{[^}]*${COLS[w]}[^}]*\\}`).test(ev.card?.m || "") ? 1 : 0;
+      if (w === "permanent") return /\b(Instant|Sorcery)\b/.test(t) ? 0 : 1;
+      { const cw = w && w.match(/^(white|blue|black|red|green|multicolored|colorless|monocolored) (.+)$/); // Defilers: "a green permanent spell"; "a red creature spell", "a blue instant or sorcery spell"
+        if (cw) { const n = ["W", "U", "B", "R", "G"].filter(k => new RegExp(`\\{[^}]*${k}[^}]*\\}`).test(ev.card?.m || "")).length;
+          const colOk = cw[1] === "multicolored" ? n >= 2 : cw[1] === "colorless" ? n === 0 : cw[1] === "monocolored" ? n === 1 : new RegExp(`\\{[^}]*${COLS[cw[1]]}[^}]*\\}`).test(ev.card?.m || "");
+          return colOk ? matches({ ...cond, what: cw[2] }, ev, srcId) : 0; } }
       if (w === "multicolored") return ["W", "U", "B", "R", "G"].filter(k => new RegExp(`\\{[^}]*${k}[^}]*\\}`).test(ev.card?.m || "")).length >= 2 ? 1 : 0;
+      if (w && /^(?:(?:white|blue|black|red|green),? (?:or |and\/or )?)+(?:white|blue|black|red|green)$/.test(w)) return w.split(/,\s*(?:or\s+|and\/or\s+)?|\s+(?:and\/)?or\s+/).filter(Boolean).some(x => new RegExp(`\\{[^}]*${COLS[x.trim()]}[^}]*\\}`).test(ev.card?.m || "")) ? 1 : 0; // God-Pharaoh's Faithful: "a blue, black, or red spell"
       if (w && /,|\bor\b/.test(w) && !/instant or sorcery/.test(w)) return w.split(/,\s*(?:and\/or\s+|or\s+)?|\s+(?:and\/)?or\s+/).map(x => x.trim()).filter(Boolean).some(a => a === "noncreature" ? !/Creature/.test(t) : new RegExp(`\\b${a}\\b`, "i").test(t)) ? 1 : 0; // Sram: "an Aura, Equipment, or Vehicle spell"
       const ok = !w || (w === "noncreature" && !/Creature/.test(t)) || (w === "creature" && /Creature/.test(t))
         || (/instant or sorcery/.test(w) && /Instant|Sorcery/.test(t))

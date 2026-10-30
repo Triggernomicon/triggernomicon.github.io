@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261030c";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030c";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030c";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030c";
+import { firebaseConfig } from "./config.js?v=20261030d";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030d";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030d";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030d";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -540,6 +540,15 @@ const roomText = (c, u) => c.faces.filter((f, i) => u[i]).map(f => String(f.o ||
 function roomCard(c, u, castI) {
   return { ...c, o: roomText(c, u), m: castI != null ? c.faces[castI].m || "" : c.m, t: c.faces[0].t || c.t, room: { u }, mode: `d${(u[0] ? 1 : 0) + (u[1] ? 2 : 0)}`, ...(castI != null ? { roomCast: castI } : {}) };
 }
+// Cases (Murders at Karlov Manor): the "Solved —" ability works only once the Case is solved; until then an end-step reminder shows the condition
+const isCaseCard = c => /\bCase\b/.test(c?.t || "") && /^To solve — /m.test(c?.o || "");
+function caseText(o, solved) {
+  return String(o || "").split("\n").map(l => {
+    const ts = l.match(/^To solve — (.+?)(?:\s*\(If unsolved, solve at the beginning of your end step\.\))?$/);
+    if (ts) return solved ? "" : `At the beginning of your end step, if this Case is unsolved and ${ts[1].replace(/\.$/, "").replace(/^\w/, c => c.toLowerCase())}, mark this Case solved.`;
+    const sv = l.match(/^Solved — (.+)$/); if (sv) return solved ? sv[1] : "";
+    return l; }).filter(Boolean).join("\n");
+}
 // One face of a multi-face card, as a card the app can play
 function faceCard(card, i) {
   const f = card?.faces?.[i];
@@ -643,6 +652,7 @@ function bfEntry(card) {
   if (card.nick) e.nick = card.nick;
   if (card.mode) e.mode = card.mode;
   if (card.room) e.room = card.room;
+  if (card.caseSt) e.caseSt = card.caseSt;
   const cda = card.o ? abilitiesOf(card).cda : null;
   if (cda) e.cda = cda;
   if (card.p != null && card.tg != null) { e.p = String(card.p); e.tg = String(card.tg); }
@@ -795,10 +805,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.30c";
+const APP_VERSION = "2026.10.30d";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030c" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030d" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2894,6 +2904,7 @@ function startController(code, pid) {
   }
   function playCard(card, opts = {}) {
     if (isRoomCard(card) && !card.room) card = roomCard(card, [true, false], 0);
+    if (isCaseCard(card) && !card.caseSt) card = { ...card, o: caseText(card.o, false), caseSt: { solved: false }, mode: "c0" };
     const fz = opts.fromZone;
     if (fz) mutate(p => { delete p[fz.z]?.[fz.id]; });
     const giftM = !opts.via && (card.o || "").match(/^Gift (an? [^(\n]+?)\s*(?:\(|$)/m);
@@ -3129,9 +3140,10 @@ function startController(code, pid) {
     const fresh = me.bf?.[id];
     if (fresh) setTimeout(() => { legendCheck(id); render(); }, 0);
     if (fresh && card.room && card.roomCast != null) { const full = card.room.u.every(Boolean); setTimeout(() => act([{ type: "unlock", id, door: card.faces[card.roomCast].n.toLowerCase() }, ...(full ? [{ type: "fullUnlock", id }] : [])]), 0); } // casting a door unlocks it
-    const abl = String(card.o || "").match(/^When this Equipment enters, create an? ([^.]*?)\b([A-Z][a-z]+) creature token, then attach this Equipment to it/m); // Ancestral Blade
+    const abl = String(card.o || "").match(/^When this Equipment enters, (?:you may pay ((?:\{[^}]+\})+)\. If you do, )?create an? ([^.]*?)\b([A-Z][a-z]+) creature token, then attach this Equipment to it/m); // Ancestral Blade; Elven Bow, Draugr's Helm ("you may pay {2}. If you do, …")
     if (fresh && (abl || /^(Living weapon|Job select|For Mirrodin!)/m.test(card.o || ""))) setTimeout(() => {
-      if (abl) { act([{ type: "create", name: abl[2], n: 1, desc: `${abl[1]}${abl[2]} creature`, src: dispName(card) }]); setTimeout(() => { const k = Object.keys(me.tokens || {}).find(x => me.tokens[x].name === abl[2] && !eqList(me.tokens[x]).length); if (k && me.bf?.[id]) attachTo(id, `tok:${k}`); }, 0); return; }
+      if (abl) { if (abl[1] && !confirm(`${dispName(card)}: pay ${abl[1]} to create a ${abl[2]}${abl[3]} token and attach ${dispName(card)} to it?`)) return;
+        act([{ type: "create", name: abl[3], n: 1, desc: `${abl[2]}${abl[3]} creature`, src: dispName(card) }]); setTimeout(() => { const k = Object.keys(me.tokens || {}).find(x => me.tokens[x].name === abl[3] && !eqList(me.tokens[x]).length); if (k && me.bf?.[id]) attachTo(id, `tok:${k}`); }, 0); return; }
       const job = /^Job select\b/m.test(card.o || ""), fm = /^For Mirrodin!/m.test(card.o || ""), tn = job ? "Hero" : fm ? "Rebel" : "Phyrexian Germ", gt = (String(card.o || "").match(/[Ee]quipped creature is an? ([A-Z][a-z]+) in addition to its other types/) || [])[1];
       act([{ type: "create", name: tn, n: 1, desc: job ? `1/1 colorless ${tn}${gt ? ` ${gt}` : ""} creature` : fm ? "2/2 red Rebel creature" : "0/0 black Phyrexian Germ creature", src: `${dispName(card)} (${job ? "job select" : fm ? "For Mirrodin!" : "living weapon"})` }]);
       setTimeout(() => { const k = Object.keys(me.tokens || {}).find(x => me.tokens[x].name === tn && !eqList(me.tokens[x]).length); if (k && me.bf?.[id]) attachTo(id, `tok:${k}`); }, 0);
@@ -5781,7 +5793,7 @@ function startController(code, pid) {
     if (!e) return;
     permLeftWatch(1, id);
     { const lv = String(e.o || lookupCard(e.n)?.o || "").match(/^(?:[A-Z][\w' ]+ — )?When [^,\n]+? leaves the battlefield, ([^\n]+)$/m); if (lv && !/^return the exiled/i.test(lv[1])) reminders.push({ id: newId(), src: dispName(e), text: lv[1][0].toUpperCase() + lv[1].slice(1) + (e.c && Object.keys(e.c).length ? ` (it had ${Object.entries(e.c).map(([k, v]) => `${v} ${counterLabel(k)}`).join(", ")})` : ""), times: 1 }); }
-    { const pg = (dest === "Graveyard" || dest === "Sacrificed") && String(e.o || lookupCard(e.n)?.o || "").match(/^When (?:this (?:artifact|creature|enchantment|permanent)|[^,\n]+?) is put into a graveyard from the battlefield, ([^\n]+)$/m); if (pg && !/^return it to its owner's hand/i.test(pg[1])) reminders.push({ id: newId(), src: dispName(e), text: pg[1][0].toUpperCase() + pg[1].slice(1), times: 1 }); }
+    { const pg = (dest === "Graveyard" || dest === "Sacrificed") && String(e.o || lookupCard(e.n)?.o || "").match(/^When (?:this (?:artifact|creature|enchantment|permanent|aura|equipment|land)|[^,\n]+?) is put into (?:a|your) graveyard from the battlefield, ([^\n]+)$/m); if (pg && !/^return it to its owner's hand/i.test(pg[1])) reminders.push({ id: newId(), src: dispName(e), text: pg[1][0].toUpperCase() + pg[1].slice(1), times: 1 }); }
     if (e.c && Object.values(e.c).some(v => v > 0)) Object.entries(me.bf || {}).forEach(([sid, x]) => { if (sid !== id && /^whenever another permanent you control leaves the battlefield, if it had counters on it, investigate/im.test(x.o || lookupCard(x.n)?.o || "")) setTimeout(() => act([{ type: "create", name: "Clue", n: 1, desc: "Clue", src: dispName(x) }]), 0); });
     if (room?.turn === pid) Object.entries(me.bf || {}).forEach(([sid, x]) => { if (sid === id || x.sukiT === (room.turnNo || 0) || !/^whenever another permanent you control leaves the battlefield during your turn, create a 1\/1 white Ally creature token\. this ability triggers only once each turn/im.test(x.o || lookupCard(x.n)?.o || "")) return; mutate(p => { if (p.bf?.[sid]) p.bf[sid].sukiT = room.turnNo || 0; }); setTimeout(() => act([{ type: "create", name: "Ally", n: 1, desc: "1/1 white Ally creature", src: dispName(x) }]), 0); });
     if (e.blitz && (dest === "Graveyard" || dest === "Sacrificed")) reminders.push({ id: newId(), src: `${dispName(e)} (blitz)`, text: "Draw a card.", times: 1 });
@@ -6771,6 +6783,7 @@ function startController(code, pid) {
               : r.modes ? modePicker(r) : r.choice ? r.effs.map((f, i) => `<button class="btn small primary" data-a="rem-pick" data-id="${r.id}" data-i="${i}">${esc(f.name)}</button>`).join("")
               : r.effs?.length ? `<button class="btn small primary" data-a="rem-apply" data-id="${r.id}">${r.resolveOrder ? "▶ Resolve" : "Apply"}</button>`
               : r.fetch ? fetchPicker(r) : ""}
+            ${r.srcId && /mark this Case solved/i.test(r.text || "") && me.bf?.[r.srcId]?.caseSt && !me.bf[r.srcId].caseSt.solved ? `<button class="btn small primary" data-a="case-solve" data-id="${r.srcId}">🔍 Solved</button>` : ""}
             ${reminders.length > 1 && reminders[0] !== r ? `<button class="btn small ghost" data-a="rem-up" data-id="${r.id}" title="You choose the order: move this one to the top to resolve it first">⬆ First</button>` : ""}<button class="btn small" data-a="rem-dismiss" data-id="${r.id}">${r.atkPlan ? "Cancel" : r.gift ? "No gift" : r.effs?.some(f => f.k === "adnaus") ? "Stop" : r.effs?.length || (drawCount(r.text) && /^you may/i.test(r.text)) ? "Skip" : "Done"}</button>
           </div>
         </div>`).join("")}${reminders.length > 4 ? `<div class="mini">+${reminders.length - 4} more</div>` : ""}</div>` : ""}`;
@@ -7542,6 +7555,7 @@ function startController(code, pid) {
           return abs.length ? `<div class="label">Activate${why ? ` <span class="cost-tag no">⛔ ${esc(why.split(":")[0])}</span>` : ""}</div><div class="abilities">${abs.map((ab, i) =>
             `<button class="btn small ability ${why ? "blocked" : ""}" data-a="activate" data-id="${id}" data-i="${i}" ${sickNow && ab.costs?.tap ? `disabled title="Summoning sick: {T} abilities can't be used until your next turn"` : ""}>${sickNow && ab.costs?.tap ? "💤 " : ""}${ab.powerMana ? `${abCostHtml(ab.cost)}<span class="ab-sep">:</span> add ${Math.max(0, Number(String(ptOf({ ...e, o: e.o || lookupCard(e.n)?.o }, countsFor(me), pid, id) || "0").split("/")[0]) || 0)} mana (${ab.powerMana.cols.map(c => manaHtml(`{${c}}`)).join(" / ")}) <span class="mini">= its power</span>` : ab.manaPer && !ab.manaPer.devotion ? `${ab.costs.tap ? "Tap: " : ""}add ${manaHtml(ab.manaPer.syms)} × ${countTypes(me, ab.manaPer.types)}` : /^[+−-]?(\d+|X)$/.test(ab.cost || "") ? esc(ab.label) : `${abCostHtml(ab.cost)}<span class="ab-sep">:</span> ${esc(ab.label)}`}</button>`).join("")}</div>` : "";
         })()}
+        ${e.caseSt ? (e.caseSt.solved ? `<div class="mini">🔍 Solved</div>` : `<div class="abilities"><button class="btn small ability" data-a="case-solve" data-id="${id}">🔍 Mark solved</button><span class="mini">${esc((String((deckCard(e.n) || lookupCard(e.n))?.o || "").match(/^To solve — ([^(\n]+)/m) || [])[1] || "")}</span></div>`) : ""}
         ${(() => { const c = e.room && (deckCard(e.n) || lookupCard(e.n)); if (!c || !isRoomCard(c)) return ""; const locked = c.faces.map((f, i) => [f, i]).filter(([, i]) => !e.room.u[i]);
           return locked.length ? `<div class="abilities">${locked.map(([f, i]) => `<button class="btn small ability" data-a="room-unlock" data-id="${id}" data-i="${i}">🔓 Unlock ${esc(f.n)} ${manaHtml(f.m || "")}</button>`).join("")}</div>` : `<div class="mini">Both doors unlocked</div>`; })()}
         ${(() => { const c = lookupCard(e.n), wr = c && winRule(c); return wr ? `<button class="btn small ability" data-a="win-manual" data-id="${id}">🏆 Win condition met: declare win</button>` : ""; })()}
@@ -7725,6 +7739,10 @@ function startController(code, pid) {
         break;
       }
       case "move": moveOut(b.dataset.id, b.dataset.dest); break;
+      case "case-solve": { const id = b.dataset.id, e = me.bf?.[id], c = e && (deckCard(e.n) || lookupCard(e.n)); if (!e?.caseSt || e.caseSt.solved || !c) break;
+        mutate(p => { const x = p.bf?.[id]; if (x) { x.caseSt = { solved: true }; x.o = caseText(c.o, true); x.mode = "c1"; } });
+        reminders = reminders.filter(r => !(r.srcId === id && /mark this Case solved/i.test(r.text || "")));
+        logTo(code, `🔍 ${me.name} solved ${dispName(e)}`); render(); break; }
       case "room-unlock": { const id = b.dataset.id, i = Number(b.dataset.i), e = me.bf?.[id], c = e && (deckCard(e.n) || lookupCard(e.n)); if (!e?.room || !isRoomCard(c) || e.room.u[i]) break;
         const u = e.room.u.map((x, k) => x || k === i), rc = roomCard(c, u);
         mutate(p => { const x = p.bf?.[id]; if (x) { x.room = rc.room; x.o = rc.o; x.mode = rc.mode; } });
