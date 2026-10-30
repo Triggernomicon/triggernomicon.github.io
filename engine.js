@@ -689,15 +689,23 @@ function parseCond(cond, cardName) {
   if (/^one or more creatures attack one of your opponents(?: or a planeswalker they control)?$/.test(c)) return { ev: "youattack" };
   if (/^you gain life for the first time each turn$/.test(c)) return { ev: "gainlife", first: true };
   if (/^(?:this creature|[a-z ,'-]+?) or another creature dies$/.test(c)) return { ev: "dies", nontoken: false, mine: false, opp: false, other: false };
-  { const oz = c.match(/^(?:this creature|[a-z ,'-]+?) or another ([a-z]+) (you control )?dies$/); if (oz && !/^(creature|permanent|token)$/.test(oz[1])) return { ev: "dies", types: [oz[1]], nontoken: false, mine: !!oz[2], opp: false, other: false }; } // Vengeful Dead: "this creature or another Zombie"
+  { const oz = c.match(/^(?:this creature|[a-z ,'-]+?) or another (nontoken )?([a-z]+) (you control )?dies$/); if (oz && !/^(creature|permanent|token)$/.test(oz[2])) return { ev: "dies", types: [oz[2]], nontoken: !!oz[1], mine: !!oz[3], opp: false, other: false }; } // Polukranos: "or another nontoken Hydra you control" // Vengeful Dead: "this creature or another Zombie"
   if (/^(?:a|one or more) tokens? you control leaves? the battlefield$/.test(c)) return { ev: "tokleave", once: /one or more/.test(c) };
   if (c === `${short} becomes tapped` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} becomes tapped` || /^this (creature|permanent|artifact|land) becomes tapped$/.test(c) || c === `${short} become tapped`) return { ev: "selftap" };
   if (/^you put one or more -1\/-1 counters on a creature$/.test(c)) return { ev: "m1m1put" };
   if (/^(?:one or more |a )?-1\/-1 counters? (?:is|are) put on (?:a|one or more) creatures?$/.test(c)) return { ev: "m1m1put", check: true, askNote: "Fires on -1/-1 counters you put with the app; add any others by hand." }; // Flourishing Defenses, Wickersmith's Tools (your own counters; others' by hand)
   if (/^you discard (a|one or more) cards?$/.test(c)) return { ev: "discard", once: /one or more/.test(c) };
+  if (/^you discard one or more cards for the first time each turn$/.test(c)) return { ev: "discard", once: true, check: true, askNote: "Only the first time you discard this turn." }; // Rielle
   { const dk = c.match(/^you discard (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (dk) return { ev: "discard", once: false, check: true, askNote: `Only if you discarded a ${dk[1]} card.` }; } // Bone Miser, Surly Badgersaur: the app doesn't know which card
   if (/^you cycle or discard (?:another|a) card$/.test(c)) return { ev: "discard", once: false }; // Archfiend of Ifnir (cycling is caught where you cycle)
   if (/^an opponent discards (a|one or more) cards?$/.test(c)) return { ev: "oppdiscard", once: /one or more/.test(c) };
+  { const od = c.match(/^an opponent discards (?:a|an) ((?:non)?[a-z]+(?:,? (?:or )?(?:non)?[a-z]+)*) card$/); if (od) return { ev: "oppdiscard", once: false, check: true, askNote: `Only if they discarded a ${od[1]} card.` }; } // Waste Not
+  if (/^(?:a player discards (?:a|one or more) cards?|one or more players discard one or more cards)$/.test(c)) return { ev: "oppdiscard", anyP: true, once: /one or more/.test(c) }; // Tinybones, Hostile Investigator
+  { const yd = c.match(/^you discard one or more ((?:non)?[a-z]+) cards(?: for the first time each turn)?$/); if (yd) return { ev: "discard", once: true, check: true, askNote: `Only if you discarded a ${yd[1]} card${/first time/.test(c) ? ", the first time this turn" : ""}.` }; } // Urza, Mishra
+  { const gl = c.match(/^(?:one or more ([a-z ,/-]+?) cards leave|one or more cards leave|a card leaves) your graveyard( during your turn)?$/); if (gl && (gl[1] || gl[2])) return { ev: "gyleave", check: true, askNote: `Only ${[gl[1] ? `if a ${gl[1].replace(/\band\/or\b/g, "or")} card left` : "", gl[2] ? "during your turn" : ""].filter(Boolean).join(", ")}.` }; } // Desecrated Tomb, Kheru Goldkeeper
+  if (/^you gain life (?:for the first time )?during (?:your turn|each of your turns)$/.test(c) || /^you gain or lose life during your turn$/.test(c)) return { ev: "gainlife", ...(/first time/.test(c) ? { first: true } : {}), check: true, askNote: `Only during your turn${/or lose/.test(c) ? " (losing life counts too: add that by hand)" : ""}.` }; // Cat Collector, Wax-Wane Witness
+  if (/^you draw a card during an opponent's turn$/.test(c)) return { ev: "youdraw", check: true, askNote: "Only during an opponent's turn." }; // The Watcher in the Water
+  if (/^you commit a crime during your turn$/.test(c)) return { ev: "crime", check: true, askNote: "Only during your turn." };
   if (c === `${short} dies` || c === `${cardName.split("#")[0].split(" // ")[0].toLowerCase()} dies` || /^this (creature|permanent|vehicle) dies$/.test(c)) return { ev: "selfdies" };
   if (/^you sacrifice (?:this (?:creature|aura|artifact|enchantment|permanent|equipment|vehicle|land)|it)$/.test(c) || c === `you sacrifice ${short}`) return { ev: "selfsac" };
   if (/^you choose a creature as your ring-bearer$/.test(c)) return { ev: "ringbearer" };
@@ -723,11 +731,27 @@ function parseCond(cond, cardName) {
   { const ta = c.match(/^(?:a|an|another) ([a-z]+) (you control )?dies$/); if (ta && !/^(creature|permanent|token|card|player|source)$/.test(ta[1])) return { ev: "dies", types: [singular(ta[1])], nontoken: false, mine: !!ta[2], opp: false, other: /^another/.test(c) }; } // Hungry Lynx ("a Rat dies"), Atla Palani ("an Egg you control dies")
   { const td = c.match(/^(a|another|one or more) (nontoken )?(?:other )?([a-z]+(?:,? (?:or |and\/or )?[a-z]+)*) you control (?:dies|die)$/); if (td && !/\bcreatures?\b|\btokens?\b|\bpermanents?\b/.test(td[3]) && !c.startsWith(short)) return { ev: "dies", types: splitTypes(td[3]), nontoken: !!td[2], mine: true, opp: false, other: td[1] === "another" || /\bother\b/.test(c), once: td[1] === "one or more" }; }
   if (/\bdies\b/.test(c) && /\bcreature\b/.test(c)) return { ...(/\b(attacking|blocking|modified) creature\b|with an? (?:[a-z+/-]+ )?counter on it|dealt damage this turn/.test(c) ? { check: true } : {}), ev: "dies", nontoken: /nontoken/.test(c), mine: /you control/.test(c) && !/you don't control/.test(c), opp: /an opponent controls|you don't control/.test(c), other: /\banother\b/.test(c) && !c.startsWith(short) && !/^this (?:creature|permanent) or another\b/.test(c) };
+  // Disciple of the Vault, Marionette Apprentice, the oil-counter cards: another permanent "is put into a graveyard from the battlefield" (destroyed or sacrificed);
+  // the source's own trip ("this artifact is put into a graveyard") is handled where it leaves, so it isn't read here
+  { const tg = c.match(/^(a|an|another|one or more) (other )?(nontoken )?([a-z ,/'-]+?) ?(you control |you own |an opponent controls |your opponents control |owned by another player |)(?:is|are) put into (a|your|an opponent's) graveyard from the battlefield$/);
+    if (tg && !c.startsWith(short) && !/^(?:this|it)\b/.test(tg[4]) && c !== "a creature is put into your graveyard from the battlefield") { // Mortuary keeps its own rule below
+      const own = tg[5].trim(), types = splitTypes(tg[4].replace(/\band\/or\b/g, "or").replace(/\bpermanents?\b/, "permanent"));
+      return { ev: "toGy", types, nontoken: !!tg[3], other: tg[1] === "another" || !!tg[2], once: tg[1] === "one or more",
+        mine: /^you /.test(own) || tg[6] === "your", opp: /opponent|another player/.test(own) || tg[6] === "an opponent's" }; } }
+  { const oa = c.match(/^one or more (other )?(nontoken )?([a-z]+(?:,? (?:and\/or |or )?[a-z]+)+) you control die$/); // G'raha Tia: "creatures and/or artifacts"
+    if (oa && /\bartifacts?\b/.test(oa[3])) return { ev: "toGy", types: splitTypes(oa[3]), nontoken: !!oa[2], other: !!oa[1], once: true, mine: true, opp: false }; }
+  { const om = c.match(/^one or more (other )?(nontoken )?creatures( you control| your opponents control| an opponent controls)? die$/); // Vraan, Morbid Opportunist, Spiteful Banditry
+    if (om) return { ev: "dies", nontoken: !!om[2], mine: om[3] === " you control", opp: !!om[3] && om[3] !== " you control", other: !!om[1], once: true }; }
   let m = c.match(/you sacrifice (one or more|a|an|another) ([\w -]+?)(?: you control)?$/);
   if (m) return { ev: "sac", what: m[2], once: m[1] === "one or more" };
   m = c.match(/(?:a|an|another) ([\w-]+) you control is put into a graveyard/);
   if (m) return { ev: "sac", what: m[1] };
   if (/a land (you control )?enters|a land enters the battlefield under your control/.test(c)) return { ev: "land" };
+  // Faramir ("a legendary creature you control with mana value 4 or greater"), Tocasia's Welcome, Doc Ock's Tentacles, Wildborn Preserver ("another non-Human creature")
+  { const cq = c.match(/^(a|another|one or more) (other )?(nontoken )?((?:(?:legendary|non-[a-z]+|[a-z]+) )*?)creatures? you control(?: with mana value (\d+) or (greater|less))? enters?$/);
+    if (cq && (cq[5] || /\bnon-/.test(cq[4]))) { const pre = cq[4].trim().split(/\s+/).filter(Boolean);
+      return { ev: "creature", nontoken: !!cq[3], other: cq[1] === "another" || !!cq[2], ...(pre.length ? { pre } : {}), ...(cq[5] ? (cq[6] === "greater" ? { mvMin: Number(cq[5]) } : { mvMax: Number(cq[5]) }) : {}), ...(cq[1] === "one or more" ? { once: true } : {}) }; } }
+  c = c.replace(/^((?:a|another|one or more) (?:nontoken )?creatures?) with power (\d+) or (greater|less) enters? (?:the battlefield )?under your control$/, "$1 you control with power $2 or $3 enters"); // Hadran
   { const pw = c.match(/^(?:one or more )?(another|a|other) (nontoken )?creatures? you control with power (\d+) or (greater|less) enters?$/);
     if (pw) return { ev: "creature", nontoken: !!pw[2], other: pw[1] !== "a", ...(pw[4] === "greater" ? { powMin: Number(pw[3]) } : { powMax: Number(pw[3]) }), ...(/^one or more/.test(c) ? { once: true } : {}) }; }
   if (/(another|a) (nontoken )?creature (you control )?enters/.test(c)) return { ev: "creature", nontoken: /nontoken/.test(c), other: /another/.test(c) };
@@ -739,6 +763,7 @@ function parseCond(cond, cardName) {
   { const aw = c.match(/^(a|an) ([a-z]+) attacks$/); if (aw && !["creature", "player", "opponent", "permanent", "token"].includes(aw[2]) && !c.startsWith(short)) return { ev: "typedAtk", types: [aw[2]], nontoken: false, other: false }; }
   { const ta = c.match(/^(a|an|another) ((?:nontoken |non-[a-z]+ )?[a-z]+(?: or [a-z]+)?) you control attacks$/); if (ta && !c.startsWith(short)) return { ev: "typedAtk", types: splitTypes(ta[2].replace(/^nontoken /, "")), nontoken: /nontoken/.test(ta[2]), other: ta[1] === "another" }; }
   if (/^a player sacrifices a permanent$/.test(c)) return { ev: "sac", what: "" };
+  { const ps = c.match(/^a player sacrifices (?:a|an) (nontoken )?(creature|artifact|land|enchantment|token)$/); if (ps) return { ev: "sac", what: ps[1] ? "nontoken" : ps[2], ...(ps[1] ? { check: true, askNote: `Only for a nontoken ${ps[2]}.` } : {}) }; } // Mortician Beetle (other players' sacrifices arrive as reminders)
   if (/^a creature attacks$/.test(c)) return { ev: "attack", types: null, other: false };
   if (/^a player sacrifices another permanent$/.test(c)) return { ev: "sac", what: "", notSelf: true };
   if (/^you create or sacrifice a token$/.test(c)) return { ev: "tokOrSac" };
@@ -800,6 +825,8 @@ export function kwExpand(o) {
     .replace(/^Whenever you cast (an? [^,\n]+? spell) or (an? [^,\n]+? enters), ([^\n]+)/gm, (_, a, b, e) => `Whenever you cast ${a}, ${e}\nWhenever ${b}, ${e}`)
     // "When this creature enters or dies, …" (Mogg War Marshal, Stitcher's Supplier), "another creature you control enters or dies" (Pelt Collector), "enters or becomes tapped"
     .replace(/^(When|Whenever) ([^,\n]+?) enters or (dies|becomes tapped|leaves the battlefield), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\n${w} ${who} ${b}, ${e}`)
+    // "Whenever Carth enters or a planeswalker you control dies", "Jerren enters or another nontoken Human you control dies": two triggers, one effect
+    .replace(/^(When|Whenever) ([^,\n]+?) enters or ((?:a|an|another) [^,\n]+? dies), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\nWhenever ${b}, ${e}`)
     // "When this artifact enters and when you sacrifice it, …" (Carrot Cake, Heaped Harvest)
     .replace(/^(When this [a-z]+ enters) and (when you sacrifice it), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\nWhen you sacrifice it, ${e}`)
     // "Whenever Millicent or another nontoken Spirit you control dies or deals combat damage to a player, …"
@@ -1163,14 +1190,16 @@ function matches(cond, ev, srcId) {
     }
     case "creature": {
       const pwOk = pw => (cond.powMin == null || pw >= cond.powMin) && (cond.powMax == null || pw <= cond.powMax);
-      if (ev.type === "enters" && /\bCreature\b/.test(ev.card.t || "") && !(cond.other && ev.id === srcId)) return cond.powMin != null || cond.powMax != null ? (pwOk(Number(ev.card.p) || 0) ? 1 : 0) : 1;
-      if (ev.type === "tokens" && !cond.nontoken) { const n = ev.list.filter(b => isCreatureToken(b.name) && (cond.powMin == null && cond.powMax == null || pwOk(Number((String(b.desc || "").match(/^(\d+)\//) || [])[1]) || 0))).reduce((s, b) => s + b.n, 0); return cond.once ? (n ? 1 : 0) : n; }
+      const mvOk = mv => (cond.mvMin == null || mv >= cond.mvMin) && (cond.mvMax == null || mv <= cond.mvMax);
+      const preOk = t => (cond.pre || []).every(w => w.startsWith("non-") ? !new RegExp(`\\b${w.slice(4)}\\b`, "i").test(t || "") : new RegExp(`\\b${w}\\b`, "i").test(t || ""));
+      if (ev.type === "enters" && /\bCreature\b/.test(ev.card.t || "") && !(cond.other && ev.id === srcId) && !(cond.nontoken && ev.tok)) return preOk(ev.card.t) && mvOk(ev.tok ? 0 : manaValue(ev.card.m)) && (cond.powMin != null || cond.powMax != null ? pwOk(Number(ev.card.p) || 0) : true) ? 1 : 0;
+      if (ev.type === "tokens" && !cond.nontoken) { const n = ev.list.filter(b => isCreatureToken(b.name) && preOk(tokenPerm(b).t) && mvOk(0) && (cond.powMin == null && cond.powMax == null || pwOk(Number((String(b.desc || "").match(/^(\d+)\//) || [])[1]) || 0))).reduce((s, b) => s + b.n, 0); return cond.once ? (n ? 1 : 0) : n; }
       return 0; }
     case "creature_old":
       return 0;
     case "tempt": return ev.type === "tempt" ? 1 : 0;
     case "discard": return ev.type === "discard" ? (cond.once ? 1 : ev.n || 1) : 0;
-    case "oppdiscard": return ev.type === "oppdiscard" ? (cond.once ? 1 : ev.n || 1) : 0;
+    case "oppdiscard": return ev.type === "oppdiscard" || (cond.anyP && ev.type === "discard") ? (cond.once ? 1 : ev.n || 1) : 0;
     case "selftap": return ev.type === "tapped" && ev.id === srcId ? 1 : 0;
     case "youattack": return ev.type === "youattack" ? 1 : 0;
     case "gainlife": return ev.type === "gainlife" && (!cond.first || ev.first) ? 1 : 0;
@@ -1187,7 +1216,7 @@ function matches(cond, ev, srcId) {
       const mine = ev.id ? (curP.bf?.[ev.id] && isT(curP.bf[ev.id]) ? 1 : 0) : ev.tok && isT(null, ev.tok) ? ev.n || 1 : 0;
       return mine && now >= cond.min && now - mine < cond.min ? 1 : 0;
     }
-    case "selfsac": return ev.type === "sac" && ev.ids?.includes(srcId) ? 1 : 0; // Ordeals, Daemogoth Woe-Eater: "when you sacrifice this"
+    case "selfsac": return ev.type === "sac" && !ev.foreign && ev.ids?.includes(srcId) ? 1 : 0; // Ordeals, Daemogoth Woe-Eater: "when you sacrifice this"
     case "selfdies": return (ev.type === "dies" || (cond.leaves && ev.type === "leaves" && (!cond.toGy || /^(?:Graveyard|Sacrificed)$/.test(ev.dest || "")))) && ev.ids?.includes(srcId) ? 1 : 0;
     case "attack": {
       if (ev.type !== "attacks" || (cond.other && ev.id === srcId)) return 0;
@@ -1199,7 +1228,7 @@ function matches(cond, ev, srcId) {
     case "land":
       return ev.type === "enters" && /\bLand\b/.test(ev.card.t || "") ? 1 : 0;
     case "sac": {
-      if (ev.type !== "sac") return 0;
+      if (ev.type !== "sac" || ev.foreign) return 0;
       const name = ev.name.toLowerCase();
       const ok = !cond.what || cond.what.split(/ or |, /).map(w => singular(w.trim())).some(w => w === "permanent" || name === w
         || (w === "artifact" && (ev.artifact || !isCreatureToken(ev.name)))
@@ -1209,17 +1238,34 @@ function matches(cond, ev, srcId) {
       if (cond.notSelf && ev.id && ev.id === srcId) return 0;
       return ok ? (cond.once ? 1 : ev.n) : 0;
     }
-    case "dies":
+    case "dies": {
       if (ev.type !== "dies") return 0;
       if (ev.foreign && cond.mine) return 0; // another player's creature: "creature you control" doesn't see it
       if (cond.opp && !ev.foreign) return 0; // "a creature an opponent controls dies" (The Meathook Massacre)
-      if (cond.once) return 1;
       if (cond.token && !ev.token) return 0;
       if (cond.nontoken && ev.token) return 0;
-      if (cond.types && !ev.ts) return ev.name && cond.types.some(w => new RegExp(`\\b${w}\\b`, "i").test(ev.name)) ? ev.n || 1 : 0; // no type info: only a named token can match
-      if (cond.types && ev.ts) { const n = ev.ts.filter((t, i) => cond.types.some(w => new RegExp(`\\b${w}\\b`, "i").test(t || "")) && !(cond.other && ev.ids?.[i] === srcId)).length * (ev.token && ev.ts.length === 1 ? ev.n || 1 : 1); return cond.once ? (n ? 1 : 0) : n; }
-      // "another creature" doesn't count the source's own death
-      return cond.other && ev.ids?.includes(srcId) ? ev.n - 1 : ev.n;
+      let n;
+      if (cond.types && !ev.ts) n = ev.name && cond.types.some(w => new RegExp(`\\b${w}\\b`, "i").test(ev.name)) ? ev.n || 1 : 0; // no type info: only a named token can match
+      else if (cond.types) n = ev.ts.filter((t, i) => cond.types.some(w => new RegExp(`\\b${w}\\b`, "i").test(t || "")) && !(cond.other && ev.ids?.[i] === srcId)).length * (ev.token && ev.ts.length === 1 ? ev.n || 1 : 1);
+      else n = cond.other && ev.ids?.includes(srcId) ? (ev.n || 1) - 1 : ev.n || 1; // "another creature" doesn't count the source's own death
+      return cond.once ? (n > 0 ? 1 : 0) : n;
+    }
+    case "toGy": { // a permanent put into a graveyard from the battlefield: creatures arrive as "dies", other permanents as "sac"
+      const isT = (t, w) => w === "permanent" || new RegExp(`\\b${w}`, "i").test(t || "");
+      let n = 0;
+      if (ev.type === "dies") {
+        if (ev.foreign ? cond.mine : cond.opp) return 0;
+        if (cond.nontoken && ev.token) return 0;
+        if (ev.ts) n = ev.ts.filter((t, i) => cond.types.some(w => isT(t, w)) && !(cond.other && ev.ids?.[i] === srcId)).length * (ev.token && ev.ts.length === 1 ? ev.n || 1 : 1);
+        else n = cond.types.some(w => w === "creature" || w === "permanent" || (ev.name && isT(ev.name, w))) ? (cond.other && ev.ids?.includes(srcId) ? (ev.n || 1) - 1 : ev.n || 1) : 0;
+      } else if (ev.type === "sac" && !ev.creature) { // a creature that's sacrificed also dies: counted there
+        if (ev.foreign ? cond.mine : cond.opp) return 0;
+        if ((cond.nontoken && ev.token) || (cond.other && ev.ids?.includes(srcId))) return 0;
+        const t = ev.t || (ev.token ? tokenPerm({ name: ev.name }).t : "");
+        n = cond.types.some(w => isT(t, w) || isT(ev.name, w) || (w === "artifact" && ev.artifact)) ? ev.n || 1 : 0;
+      } else return 0;
+      return cond.once ? (n > 0 ? 1 : 0) : n;
+    }
     case "phase":
       return ev.type === "phase" && ev.phase === cond.phase
         && (cond.whose === "each" || (cond.whose === "your" && ev.mine) || (cond.whose === "opp" && !ev.mine)) ? 1 : 0;
@@ -1233,7 +1279,7 @@ function matches(cond, ev, srcId) {
       const t = ev.t || "";
       return cond.types.some(w => w === "creature" ? /\bCreature\b/.test(t) : w.startsWith("non-") ? /\bCreature\b/.test(t) && !new RegExp(`\\b${w.slice(4).replace(/ creature$/, "")}\\b`, "i").test(t) : new RegExp(`\\b${w}\\b`, "i").test(t)) ? (ev.n || 1) : 0;
     }
-    case "tokOrSac": return ev.type === "tokens" ? 1 : ev.type === "sac" && ev.token ? (ev.n || 1) : 0;
+    case "tokOrSac": return ev.type === "tokens" ? 1 : ev.type === "sac" && ev.token && !ev.foreign ? (ev.n || 1) : 0;
     case "playOrCast": return (ev.type === "cast" && !ev.foreign) || (ev.type === "enters" && ev.played) ? 1 : 0;
     case "youdraw": {
       if (ev.type !== "draw") return 0;

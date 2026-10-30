@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261029b";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261029b";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261029b";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261029b";
+import { firebaseConfig } from "./config.js?v=20261030a";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030a";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030a";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030a";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -788,10 +788,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.29b";
+const APP_VERSION = "2026.10.30a";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261029b" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030a" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -1704,12 +1704,15 @@ function startController(code, pid) {
     if (entered > 0) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => /whenever a creature an opponent controls enters/i.test(e.o || lookupCard(e.n)?.o || "")))
       .forEach(o => sendOrders({ [o.id]: {} }, { how: "oppEnters", n: entered, names: enteredNames.slice(0, 6) }));
     events.filter(ev => ev.type === "sac" && !ev.foreign).forEach(ev => tellTable("sac", { ev, n: ev.n || 1, what: ev.name, note: `sacrificed ${ev.token ? `${ev.n > 1 ? `${ev.n} ` : "a "}${ev.name} token${ev.n > 1 ? "s" : ""}` : ev.name}.` }));
+    { const gy = events.filter(ev => ev.type === "sac" && !ev.foreign && !ev.creature); // Disciple of the Vault, Kothophed: another player's noncreature permanent went to the graveyard
+      if (gy.length) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => { const c = lookupCard(e.n) || e; return c?.o && abilitiesOf({ ...c, o: e.o || c.o }).trig.some(t => t.cond?.ev === "toGy" && !t.cond.mine); }))
+        .forEach(o => sendOrders({ [o.id]: {} }, { how: "foreignGy", list: gy.map(ev => ({ name: ev.name, n: ev.n || 1, token: !!ev.token, artifact: !!ev.artifact, t: ev.t || "" })).slice(0, 50) })); }
     const disc = events.filter(ev => ev.type === "discard").reduce((a, ev) => a + (ev.n || 1), 0);
-    if (disc) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => /whenever an opponent discards/i.test(e.o || lookupCard(e.n)?.o || "")))
+    if (disc) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => /whenever (?:an opponent discards|a player discards|one or more players discard)/i.test(e.o || lookupCard(e.n)?.o || "")))
       .forEach(o => sendOrders({ [o.id]: {} }, { how: "oppDiscard", n: disc }));
     const died = events.filter(ev => ev.type === "dies" && !ev.foreign).reduce((a, ev) => a + (ev.n || 1), 0);
     if (died) { const t = room?.turnNo || 0; setTimeout(() => mutate(p => { p.deaths = { t, n: (p.deaths?.t === t ? p.deaths.n || 0 : 0) + died }; }, true), 0); }
-    if (died) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => { const c = lookupCard(e.n) || e; return c?.o && abilitiesOf({ ...c, o: e.o || c.o }).trig.some(t => t.cond?.ev === "dies" && !t.cond.mine); }))
+    if (died) seated(room).filter(o => o.id !== pid && !isOut(o) && Object.values(o.bf || {}).some(e => { const c = lookupCard(e.n) || e; return c?.o && abilitiesOf({ ...c, o: e.o || c.o }).trig.some(t => (t.cond?.ev === "dies" || t.cond?.ev === "toGy") && !t.cond.mine); }))
       .forEach(o => sendOrders({ [o.id]: {} }, { how: "foreignDies", n: died, token: events.filter(ev => ev.type === "dies" && !ev.foreign).every(ev => ev.token), ts: events.filter(ev => ev.type === "dies" && !ev.foreign).flatMap(ev => ev.ts?.length ? (ev.token ? Array(ev.n || 1).fill(ev.ts[0]) : ev.ts) : []).slice(0, 200), src: `${me.name}'s creature${died === 1 ? "" : "s"}` }));
     if (tag) recordStep(tag, before);
     ctx.logs.forEach(l => logTo(code, l));
@@ -3265,7 +3268,16 @@ function startController(code, pid) {
     }));
   }
   function exaltedCheck(who) {
-    if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted); return; } // a second attacker: not alone
+    if (me.youAtk === combatKey()) { reminders = reminders.filter(r => !r.exalted && !r.alone); return; } // a second attacker: not alone
+    { const wt = who.kind === "bf" ? me.bf?.[who.id]?.t || "" : me.tokens?.[who.id] ? tokenPerm(me.tokens[who.id]).t : ""; // Rafiq, Squall, the Samurai and Warrior cards: "attacks alone"
+      Object.entries(me.bf || {}).forEach(([sid, x]) => String(x.o || lookupCard(x.n)?.o || "").split("\n").forEach(l => {
+        const t = l.trim().replace(/^[^—\n]{1,40} — /, ""), short = x.n.split(",")[0].split(" // ")[0];
+        let m = t.match(/^whenever (a|another) ((?:[a-z-]+ )*?)creature you control attacks (?:a player )?alone, (.+)$/i), fx = null;
+        if (m && !(m[1].toLowerCase() === "another" && who.id === sid) && m[2].trim().split(/\s+/).filter(Boolean).every(w => w.startsWith("non") ? !new RegExp(`\\b${w.replace(/^non-?/, "")}\\b`, "i").test(wt) : new RegExp(`\\b${w}\\b`, "i").test(wt))) fx = m[3];
+        if (!m && (m = t.match(/^whenever an? ([A-Z][a-z]+(?:,? (?:or )?[A-Z][a-z]+)*) you control attacks (?:a player )?alone, (.+)$/)) && m[1].split(/,? or |, /).some(ty => new RegExp(`\\b${ty}\\b`).test(wt))) fx = m[2];
+        if (!m && (m = t.match(new RegExp(`^whenever (?:this creature|${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}) attacks alone, (.+)$`, "i"))) && who.kind === "bf" && who.id === sid) fx = m[1];
+        if (fx) reminders.push({ id: newId(), src: dispName(x), srcId: sid, text: `If ${who.name} attacks alone: ${fx.replace(/\b(it|that creature)\b/, who.name)}`, times: 1, alone: true });
+      })); }
     const n = Object.values(me.bf || {}).reduce((s, x) => s + (String(x.o || lookupCard(x.n)?.o || "").match(/^Exalted\b/gm) || []).length, 0);
     if (!n) return;
     reminders.push({ id: newId(), src: n > 1 ? `Exalted ×${n}` : "Exalted", text: `If ${who.name} attacks alone, it gets +${n}/+${n} until end of turn.`, times: 1, exalted: { ...who, n } });
@@ -4902,6 +4914,7 @@ function startController(code, pid) {
       });
       return;
     }
+    if (o.how === "foreignGy") { act((o.list || []).map(x => ({ type: "sac", ...x, foreign: true }))); return; }
     if (o.how === "foreignDies") { act([{ type: "dies", n: o.n, token: !!o.token, foreign: true, ...(o.ts?.length === o.n ? { ts: o.ts } : {}) }]); return; }
     if (o.how === "gyTake") { const g = Object.entries(me.gy || {}).find(([, x]) => x.n === o.name); if (g) { act([], p => { delete p.gy?.[g[0]]; }); logTo(code, `${o.name} left ${me.name}'s graveyard (${o.byName}'s ${o.src})`); } return; }
     if (o.how === "ctrClear") { const e = me.bf?.[o.id]; if (!e) return; act([], p => { if (p.bf[o.id]) delete p.bf[o.id].c; }); logTo(code, `${o.byName}'s ${o.src}: all counters removed from ${me.name}'s ${dispName(e)}`); return; }
@@ -10631,6 +10644,14 @@ function startController(code, pid) {
           const kp = Object.entries(now).reduce((a, [oid, ids]) => a + ids.filter(x => !(oppLandSeen[oid] || []).includes(x) && room.players?.[oid]?.bf?.[x]?.pl).length, 0); // Burgeoning: only lands played, not put onto the battlefield
           const bg = kp && Object.values(me.bf || {}).find(x => /whenever an opponent plays a land, you may put a land card from your hand onto the battlefield/i.test(x.o || lookupCard(x.n)?.o || ""));
           if (bg) { reminders.push({ id: newId(), src: dispName(bg), text: `An opponent played a land: you may put a land card from your hand onto the battlefield${kp > 1 ? ` (×${kp})` : ""}.`, times: 1 }); setTimeout(render, 0); }
+          { const nb = Object.entries(now).reduce((a, [oid, ids]) => a + ids.filter(x => !(oppLandSeen[oid] || []).includes(x) && !/\bBasic\b/.test(room.players?.[oid]?.bf?.[x]?.t || "")).length, 0);
+            const who = Object.entries(now).filter(([oid, ids]) => ids.some(i => !(oppLandSeen[oid] || []).includes(i))).map(([oid]) => room.players?.[oid]?.name).join(", ");
+            if (k) Object.entries(me.bf || {}).forEach(([sid, x]) => String(x.o || lookupCard(x.n)?.o || "").split("\n").forEach(l => { // Zo-Zu, Spectrum Sentinel, Ankh of Mishra-style "a land an opponent controls enters"
+              const t = l.trim().replace(/^[^—\n]{1,40} — /, ""), m = t.match(/^whenever (?:a|an|one or more) (nonbasic )?lands? (?:an opponent controls |your opponents control )?enters?(?: the battlefield)?(?: under an opponent's control)?, (.+)$/i) || t.match(/^whenever an opponent plays a land, (?!you may put a land card from your hand)(.+)$/i);
+              if (!m || /^whenever a land an opponent controls enters, that player loses 1 life\. put a \+1\/\+1 counter/i.test(t)) return;
+              const times = m.length === 3 ? (m[1] ? nb : k) : kp; if (!times) return;
+              reminders.push(normalizeRem({ id: newId(), src: dispName(x), srcId: sid, text: `${who}: a${m.length === 3 && m[1] ? " nonbasic" : ""} land entered${times > 1 ? ` (×${times})` : ""}. ${(m.length === 3 ? m[2] : m[1]).replace(/^\w/, ch => ch.toUpperCase())}`, times: 1 }));
+              setTimeout(render, 0); })); }
           const seenL = oppLandSeen;
           if (k) setTimeout(() => Object.entries(me.bf || {}).forEach(([sid, x]) => { if (!/^whenever a land an opponent controls enters, that player loses 1 life\. put a \+1\/\+1 counter on this creature/im.test(x.o || lookupCard(x.n)?.o || "")) return; const who = Object.entries(now).filter(([oid, ids]) => ids.some(i => !(seenL[oid] || []).includes(i))).map(([oid]) => room.players?.[oid]?.name).join(", "); setTimeout(() => mutate(p => { const y = p.bf?.[sid]; if (y) { y.c ||= {}; y.c.p1p1 = (y.c.p1p1 || 0) + k; } }), 0); logTo(code, `⚙ ${dispName(x)}: +${k} +1/+1`); reminders.push({ id: newId(), src: dispName(x), text: `${who} had a land enter: they lose 1 life${k > 1 ? ` (×${k})` : ""}.`, times: 1 }); render(); }), 0);
         }
