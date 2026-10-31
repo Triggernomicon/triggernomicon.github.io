@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031e";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031e";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031e";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031e";
+import { firebaseConfig } from "./config.js?v=20261031f";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031f";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031f";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031f";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -407,6 +407,8 @@ function vigorOn(owner, kind, id) { return Object.entries(owner?.bf || {}).some(
 const CANT_BLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) can't (?:attack or )?block(?:,| and can't be blocked|\.?$)/im;
 const UNBLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) (?:can't block and )?can't be blocked\.?$/im;
 const banned = (owner, kind, id, ...ks) => tableBans.some(x => x.p === owner?.id && x.kind === kind && x.id === id && ks.includes(x.k));
+// How many tokens of a stack are marked (a mark without a number covers the whole stack)
+const bannedN = (owner, id, ...ks) => Math.min(owner?.tokens?.[id]?.count || 0, tableBans.filter(x => x.p === owner?.id && x.kind === "tok" && x.id === id && ks.includes(x.k)).reduce((a, x) => a + (x.n > 0 ? x.n : Infinity), 0));
 function restrText(o, atts, hostT) {
   const extra = (atts || []).flatMap(a => String(a.o || modLookup?.(a.n)?.o || "").split("\n"))
     .map(l => { const bf = l.match(/^Enchanted creature [^.]*? as long as it's an? ([A-Z][a-z]+)\. Otherwise, it can't attack or block\.$/); // Bonds of Faith
@@ -434,7 +436,10 @@ function combatStats(owner, kind, id) {
   const [p, tg] = String(tokPTfx(t, owner.id, id) || "1/1").split("/").map(x => Number(x) || 0);
   const kws = kwsOf(tokenPerm(t), owner.id, id, true).map(x => x.k);
   const to = restrText("", eqList(t).map(sid => owner.bf?.[sid]).filter(Boolean));
-  return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block") || CANT_BLOCK_RE.test(to) || banned(owner, "tok", id, "noBlock", "noAtkBlk"), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked") || UNBLOCK_RE.test(to) || banned(owner, "tok", id, "unbl"), regen: !!t.sh,
+  const noBlk = bannedN(owner, id, "noBlock", "noAtkBlk"), unblN = bannedN(owner, id, "unbl");
+  const avail = noBlk >= t.count ? t.count - (t.tapped || 0) : Math.max(0, Math.min(t.count - (t.tapped || 0), t.count - noBlk)); // marked ones count as the tapped ones first
+  return { name: `${t.name} token`, p, t: tg, kws, avail, count: t.count, ...(noBlk && noBlk < t.count ? { banN: noBlk } : {}), ...(unblN && unblN < t.count ? { unblN } : {}),
+    cantBlock: !!t.sus || kws.includes("can't block") || CANT_BLOCK_RE.test(to) || noBlk >= t.count, indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked") || UNBLOCK_RE.test(to) || unblN >= t.count, regen: !!t.sh,
     colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: to, ownerName: owner.name, vig: vigorOn(owner, "tok", id) };
 }
 const COLOR_NAMES = { W: "white", U: "blue", B: "black", R: "red", G: "green" };
@@ -912,10 +917,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31e";
+const APP_VERSION = "2026.10.31f";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031e" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031f" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2641,8 +2646,8 @@ function startController(code, pid) {
       const pv = blockPreview(a, { ...o, id: o.id }), noAtk = kind === "bf" ? attackWhy(tablePlayers[pid] || { ...me, id: pid }, id, { ...o, id: o.id }) : "";
       const notes = kind === "bf" && !noAtk ? attackNotes(tablePlayers[pid] || { ...me, id: pid }, id, { ...o, id: o.id }) : [];
       const warn = noAtk ? `🚫 It can't attack ${o.name}: ${noAtk}` : notes.length ? `⚠ ${notes.join(" · ")}` : pv.killers.length ? `⚠ ${pv.killers.map(b => `${b.name} ${b.p}/${b.t}`).join(", ")} could block and kill it` : pv.trades.length ? `⚖ ${pv.trades.map(b => b.name).join(", ")} could trade with it` : "";
-      return `<details class="plan-opp" ${warn ? "open" : ""}><summary style="border-left:4px solid ${esc(o.color)}"><b>${esc(o.name)}</b>: ${noAtk ? `🚫 can't attack (${esc(noAtk)})` : pv.able.length ? `${pv.able.length} could block${pv.menace ? " (menace: needs 2)" : ""}${pv.oneBlock ? " (only one can block it)" : ""}${pv.lure ? " (must be blocked if able)" : ""}` : "✅ nothing can block it"}${warn ? ` · <span class="plan-warn">${esc(warn)}</span>` : ""}</summary>
-        ${notes.length ? `<div class="mini">⚠ ${esc(notes.join(" · "))}</div>` : ""}${pv.rows.length ? pv.rows.map(b => `<div class="mini plan-row ${b.out ? "" : "muted"}">${esc(b.name)} <b>${b.p}/${b.t}</b>${b.count > 1 ? ` ×${b.avail}/${b.count}` : ""}${b.kws.length ? ` <i>${esc(b.kws.join(", "))}</i>` : ""} — ${esc(outText(b, true))}${b.out?.tramp ? ` · ${b.out.tramp} tramples over` : ""}</div>`).join("") : `<div class="mini muted">No creatures.</div>`}
+      return `<details class="plan-opp" ${warn ? "open" : ""}><summary style="border-left:4px solid ${esc(o.color)}"><b>${esc(o.name)}</b>: ${noAtk ? `🚫 can't attack (${esc(noAtk)})` : pv.able.length ? `${pv.able.length} could block${pv.menace ? " (menace: needs 2)" : ""}${pv.oneBlock ? " (only one can block it)" : ""}${a.unblN ? ` (${a.unblN} of the stack can't be blocked)` : ""}${pv.lure ? " (must be blocked if able)" : ""}` : "✅ nothing can block it"}${warn ? ` · <span class="plan-warn">${esc(warn)}</span>` : ""}</summary>
+        ${notes.length ? `<div class="mini">⚠ ${esc(notes.join(" · "))}</div>` : ""}${pv.rows.length ? pv.rows.map(b => `<div class="mini plan-row ${b.out ? "" : "muted"}">${esc(b.name)} <b>${b.p}/${b.t}</b>${b.count > 1 ? ` ×${b.avail}/${b.count}` : ""}${b.banN ? ` (${b.banN} can't block this turn)` : ""}${b.kws.length ? ` <i>${esc(b.kws.join(", "))}</i>` : ""} — ${esc(outText(b, true))}${b.out?.tramp ? ` · ${b.out.tramp} tramples over` : ""}</div>`).join("") : `<div class="mini muted">No creatures.</div>`}
       </details><button class="btn small ${warn ? "" : "primary"}" ${kind === "bf" ? `data-a="plan-go" data-id="${r.id}"` : `data-a="tok-atk" data-k="${esc(id)}"`} data-o="${o.id}">⚔ Attack ${esc(o.name)}${pv.killers.length || noAtk ? " anyway" : ""}</button>`;
     }).join("")}</div>`;
   }
@@ -5366,9 +5371,9 @@ function startController(code, pid) {
         <button class="btn small primary" data-a="hit-take" data-n="${nid}">Take damage</button>
         ${n.trample ? "" : `<button class="btn small" data-a="hit-block" data-n="${nid}" title="Blocked by something the app doesn't list">Blocked (other)</button>`}</div>
       ${n.stats && !n.res ? (() => { const pv = blockPreview(n.stats, { ...me, id: pid }), no = pv.rows.filter(b => b.why);
-        return `<div class="blk-pick"><div class="mini"><b>🛡 Declare blockers</b>${pv.menace ? " · menace: needs 2 or more" : ""}${pv.oneBlock ? " · it can't be blocked by more than one creature" : ""}${pv.lure ? " · it must be blocked if able" : ""}${(n.times || 1) > 1 ? ` · blocks one of the ${n.times}` : ""}</div>
+        return `<div class="blk-pick"><div class="mini"><b>🛡 Declare blockers</b>${pv.menace ? " · menace: needs 2 or more" : ""}${pv.oneBlock ? " · it can't be blocked by more than one creature" : ""}${n.stats.unblN ? ` · ${n.stats.unblN} of them can't be blocked this turn` : ""}${pv.lure ? " · it must be blocked if able" : ""}${(n.times || 1) > 1 ? ` · blocks one of the ${n.times}` : ""}</div>
         ${pv.able.length ? `<div class="modes">${pv.able.map(b => b.kind === "tok" && b.avail > 1
-          ? `<label class="mode-check blk"><input type="number" class="blk-num x-input" data-n="${nid}" data-v="${b.kind}:${esc(b.id)}" min="0" max="${b.avail}" value="0" inputmode="numeric"><span>${esc(b.name)} <b>${b.p}/${b.t}</b> <span class="muted">(how many? ${b.avail} untapped)</span><span class="mini blk-out">${esc(outText(b, false))}</span></span></label>`
+          ? `<label class="mode-check blk"><input type="number" class="blk-num x-input" data-n="${nid}" data-v="${b.kind}:${esc(b.id)}" min="0" max="${b.avail}" value="0" inputmode="numeric"><span>${esc(b.name)} <b>${b.p}/${b.t}</b> <span class="muted">(how many? ${b.avail} ${b.banN ? `can block: ${b.banN} can't this turn` : "untapped"})</span><span class="mini blk-out">${esc(outText(b, false))}</span></span></label>`
           : `<label class="mode-check blk"><input type="checkbox" class="blk-box" data-n="${nid}" value="${b.kind}:${esc(b.id)}"><span>${esc(b.name)} <b>${b.p}/${b.t}</b><span class="mini blk-out">${esc(outText(b, false))}</span></span></label>`).join("")}</div>
         <button class="btn small primary" data-a="hit-blockwith" data-n="${nid}">🛡 Block with selected</button>` : `<div class="mini muted">None of your creatures can block it.</div>`}
         ${no.length ? `<div class="mini muted">Can't block: ${no.map(b => `${esc(b.name)} (${esc(b.why)})`).join(", ")}</div>` : ""}</div>`; })() : ""}
@@ -7266,7 +7271,8 @@ function startController(code, pid) {
     if (!opts.length) return "";
     const sel = r.srcId && b.who === "mine" && /\b(?:this creature|it) [^.]*?can't be blocked this turn/i.test(r.text) ? `${pid}|bf|${r.srcId}` : "";
     const done = Object.values(room.cbans || {}).filter(x => x.turn === (room.turnNo || 0) && x.rid === r.id);
-    return `<div class="row"><select class="fetch-pick" id="cb-${r.id}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(n)}</option>`).join("")}</select><button class="btn small" data-a="ban-go" data-id="${r.id}" data-k="${b.k}">🚫 Mark: ${esc(b.label)}</button>${done.length ? `<span class="mini">✔ ${done.length} marked</span>` : ""}</div>`;
+    const many = opts.some(([v]) => { const [o, kd, id] = v.split("|"); return kd === "tok" && (room.players?.[o]?.tokens?.[id]?.count || 0) > 1; });
+    return `<div class="row"><select class="fetch-pick" id="cb-${r.id}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>${many ? `<label class="mini">How many (tokens) <input type="number" class="x-input" id="cbn-${r.id}" min="1" value="1" inputmode="numeric" style="width:3.5em"></label>` : ""}<button class="btn small" data-a="ban-go" data-id="${r.id}" data-k="${b.k}">🚫 Mark: ${esc(b.label)}</button>${done.length ? `<span class="mini">✔ ${done.length} marked</span>` : ""}</div>`;
   }
   function enteredNote(r) {
     const m = String(r.text || "").match(/if (another )?(?:an? )?([A-Z]?[a-z]+) entered the battlefield under your control this turn/i); if (!m) return "";
@@ -9963,8 +9969,9 @@ function startController(code, pid) {
       case "ban-go": {
         const v = document.getElementById(`cb-${b.dataset.id}`)?.value; if (!v) break;
         const [op, kind, id] = v.split("|"), o = room.players?.[op], nm = kind === "bf" ? (o?.bf?.[id] ? dispName(o.bf[id]) : "") : `${o?.tokens?.[id]?.name || ""} token`;
-        update(ref(db, `rooms/${code}/cbans/${newId()}`), { turn: room.turnNo || 0, p: op, kind, id, k: b.dataset.k, rid: b.dataset.id, by: pid });
-        logTo(code, `🚫 ${me.name}: ${o?.id === pid ? "their" : `${o?.name}'s`} ${nm} ${b.dataset.k === "noBlock" ? "can't block" : b.dataset.k === "noAtk" ? "can't attack" : b.dataset.k === "unbl" ? "can't be blocked" : "can't attack or block"} this turn`);
+        const cnt = kind === "tok" ? Math.max(1, Math.min(o?.tokens?.[id]?.count || 1, Math.floor(Number(document.getElementById(`cbn-${b.dataset.id}`)?.value) || 1))) : 0;
+        update(ref(db, `rooms/${code}/cbans/${newId()}`), { turn: room.turnNo || 0, p: op, kind, id, k: b.dataset.k, rid: b.dataset.id, by: pid, ...(cnt ? { n: cnt } : {}) });
+        logTo(code, `🚫 ${me.name}: ${cnt && (o?.tokens?.[id]?.count || 0) > 1 ? `${cnt} of ` : ""}${o?.id === pid ? "their" : `${o?.name}'s`} ${nm}${cnt > 1 ? "s" : ""} ${b.dataset.k === "noBlock" ? "can't block" : b.dataset.k === "noAtk" ? "can't attack" : b.dataset.k === "unbl" ? "can't be blocked" : "can't attack or block"} this turn`);
         toast(`🚫 Marked ${nm}`); break;
       }
       case "attach-go": {
@@ -10018,6 +10025,7 @@ function startController(code, pid) {
         const free = t.count - (t.tapped || 0);
         const n = Math.max(1, Math.min(free, Number(document.getElementById(`ta-${k}`)?.value) || free));
         if (!free) { toast("They're all tapped."); break; }
+        { const no = bannedN(tablePlayers[pid] || { ...me, id: pid }, k, "noAtk", "noAtkBlk"); if (no && n > t.count - no && !confirm(`${no} of these ${t.name} tokens can't attack this turn, so at most ${Math.max(0, t.count - no)} can.\n\nAttack with ${n} anyway?`)) break; }
         const vig = kwsOf(tokenPerm(t), pid, k, true).some(x => x.k === "vigilance");
         const per = Number(String(tokPTfx(t, pid, k) || "0/0").split("/")[0]) || 0;
         logTo(code, `${me.name}: ${n} ${t.name} token${n === 1 ? "" : "s"} attack`);
