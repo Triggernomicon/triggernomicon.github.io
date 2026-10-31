@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031h";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031h";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031h";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031h";
+import { firebaseConfig } from "./config.js?v=20261031i";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031i";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031i";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031i";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -922,10 +922,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31h";
+const APP_VERSION = "2026.10.31i";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031h" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031i" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2478,7 +2478,7 @@ function startController(code, pid) {
       r.text = `Deal ${r.ping.n} damage to ${r.ping.oppOnly ? "target opponent" : r.ping.playerOnly ? "target player" : "any target"}${r.ping.left > 1 ? ` (${r.ping.left} times)` : ""}${am ? `, then amass ${am.type} ${am.n}` : ""}.`;
     }
     if (!r.copyFrom && r.srcId && /copy (the exiled card|a card exiled with)/i.test(r.text || "")) r.copyFrom = r.srcId;
-    if (r.crDmg && !r.text) r.text = r.crDmg.self ? "Target creature deals damage equal to its power to itself." : `Deal ${r.crDmg.n} damage to target ${r.crDmg.cr === false ? "planeswalker" : `creature${r.crDmg.pw ? " or planeswalker" : ""}`}${r.crDmg.oppOnly ? " an opponent controls" : ""}${r.crDmg.ctrl ? ` and ${r.crDmg.ctrl} to its controller` : ""}.`;
+    if (r.crDmg && !r.text) r.text = r.crDmg.self ? "Target creature deals damage equal to its power to itself." : r.crDmg.fight ? `Target creature you control fights target creature${r.crDmg.oppOnly ? " you don't control" : ""}.` : r.crDmg.bite ? `Target creature you control deals damage equal to ${r.crDmg.bite === 2 ? "twice " : ""}its power to target ${r.crDmg.cr === false ? "planeswalker" : `creature${r.crDmg.pw ? " or planeswalker" : ""}`}${r.crDmg.oppOnly ? " you don't control" : ""}.` : `Deal ${r.crDmg.n} damage to target ${r.crDmg.cr === false ? "planeswalker" : `creature${r.crDmg.pw ? " or planeswalker" : ""}`}${r.crDmg.oppOnly ? " an opponent controls" : ""}${r.crDmg.ctrl ? ` and ${r.crDmg.ctrl} to its controller` : ""}.`;
     if (r.earthbend && !r.text) r.text = `Earthbend ${r.earthbend.n}: target land you control becomes a 0/0 creature with haste (still a land) with ${r.earthbend.n} +1/+1 counters. When it dies or is exiled, it returns tapped.`;
     if (r.anyColor && !r.text) r.text = (r.anyN || 1) > 1 ? `Add ${r.anyN} mana${r.anyOne ? " of any one color" : " in any combination of colors"}.` : "Add one mana of any color.";
     if (r.tokAtkMe && !r.text) r.text = `Create X ${r.tokAtkMe.desc} tokens (X = creatures attacking you).`;
@@ -2509,12 +2509,15 @@ function startController(code, pid) {
     if (r.dmgAll && !r.text) r.text = `Deal ${r.dmgAll.n === "creatures" ? "X (the number of creatures)" : r.dmgAll.n} damage to each ${r.dmgAll.opp ? "creature your opponents control" : "creature"}${r.dmgAll.noFly ? " without flying" : ""}${r.dmgAll.players ? ` and each ${r.dmgAll.players === "opp" ? "opponent" : "player"}` : ""}.`;
     if (r.copySpell && !r.text) r.text = `Copy ${r.copySpell.card?.n || "that spell"}?${r.copySpell.haste ? " (a permanent copy gains haste)" : ""}`;
     if (r.text && /^[a-z]/.test(r.text)) r.text = r.text[0].toUpperCase() + r.text.slice(1);
+    if (r.revealHand && !r.text) r.text = `Target ${r.revealHand.who} reveals their hand.${r.revealHand.pick ? ` You choose ${r.revealHand.what ? `a ${r.revealHand.what} card` : "a card"}; they discard it.` : ""}`;
+    if (r.tdiscard && !r.text) r.text = `Target ${r.tdiscard.who} discards ${r.tdiscard.n === 1 ? "a card" : `${r.tdiscard.n} cards`}${r.tdiscard.random ? " at random" : ""}.`;
     if (r.bane && !r.text) r.text = "Target enchantment deals damage equal to its mana value to its controller unless they sacrifice it.";
     if (r.effs?.length === 1) {
       const g = r.effs[0], t = r.times || 1;
       const conv = g.k === "swap" ? { swap: g } : g.k === "controlTurn" ? { controlTurn: true } : g.k === "countersTarget" ? { counterPick: { ...g, left: (g.total || 1) * t } }
         : g.k === "pumpTarget" ? { pumpPick: g } : g.k === "tokCopy" ? { tokCopy: true, ...(g.n != null ? { copyN: g.n } : {}) } : g.k === "tplayerTok" ? { tplayerTok: g } : g.k === "prolif" ? { prolif: true }
         : g.k === "attachNew" ? { attachNew: r.ent || {} } : g.k === "regen" ? { regen: g }
+        : g.k === "revealHand" ? { revealHand: g } : g.k === "tdiscard" ? { tdiscard: g }
         : g.k === "rummage" ? { impulse: { n: 1, cards: [], toGy: true }, note: "You may discard a card. If you do, draw a card." }
         : g.k === "extraCombat" ? null
         : g.k === "radiant" ? { radiant: {}, text: "Copy a single-target spell or ability from this turn for each other legal target." }
@@ -3154,7 +3157,7 @@ function startController(code, pid) {
       if (/^prevent all damage that would be dealt this turn by creatures your opponents control\.?$/im.test(card.o || "")) { update(ref(db, `rooms/${code}/fog`), { turnNo: room.turnNo || 0, src: dispName(card), by: me.name, except: null, oppsOf: pid }); logTo(code, `🛡 ${me.name}'s ${dispName(card)}: damage from ${me.name}'s opponents' creatures is prevented this turn`); }
       if (/prevent all combat damage that would be dealt this turn/i.test(card.o || "")) { const pm = card.o.match(/prevent all combat damage that would be dealt this turn[^.]*\./i)[0]; reminders.push({ id: newId(), src: dispName(card), text: pm, times: 1 }); logTo(code, `🛡 ${me.name}'s ${dispName(card)}: ${pm}`); }
       if (chancy && sp.effs?.length) sp = { ...sp, effs: [], auto: false };
-      let effs = sp.auto ? sp.effs : sp.effs.filter(f => (f.k === "tok" && (f.n?.attacking || f.lead)) || ["fetch", "remove", "adnaus", "setlife", "edict", "imprint", "regrow", "impulse", "handmana", "gyhate", "countersTarget", "countersEach", "tokCopy", "tplayerTok", "untapAll", "untapN", "ping", "pumpTarget", "pumpAll", "controlTurn", "swap", "prolif", "tempt", "oracle", "drawPer", "regen", "copyAllTokens", "tgain", "gyOne", "sacThen", "drawFor", "gainPer", "mill", "copyCreature", "suspect", "manaAny", "dmgTurn", "noPreventTurn", "dmgCr", "wisecrack", "bane", "radiant", "extraCombat", "untapAttacked", "rummage", "dmgAll", "discardN", "copySpell", "dmgPer", "doublePow", "dmgDef", "pcounter", "earthbend", "dieGain", "tokAtkMe", "veil", "plumb", "minusX", "bounceOwn", "drainX", "necroSel", "spoil", "tloseX", "clearCtrs", "drainDevo", "oppLoseThat", "victimize", "prepSelf", "oppsTok", "revealMv", "attachSelf", "untapSelf", "arcum", "addType", "copyNext", "animate", "copyPick", "maze", "eachDraw", "wheelGy", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k));
+      let effs = sp.auto ? sp.effs : sp.effs.filter(f => (f.k === "tok" && (f.n?.attacking || f.lead)) || ["revealHand", "tdiscard", "tapLock", "fetch", "remove", "adnaus", "setlife", "edict", "imprint", "regrow", "impulse", "handmana", "gyhate", "countersTarget", "countersEach", "tokCopy", "tplayerTok", "untapAll", "untapN", "ping", "pumpTarget", "pumpAll", "controlTurn", "swap", "prolif", "tempt", "oracle", "drawPer", "regen", "copyAllTokens", "tgain", "gyOne", "sacThen", "drawFor", "gainPer", "mill", "copyCreature", "suspect", "manaAny", "dmgTurn", "noPreventTurn", "dmgCr", "wisecrack", "bane", "radiant", "extraCombat", "untapAttacked", "rummage", "dmgAll", "discardN", "copySpell", "dmgPer", "doublePow", "dmgDef", "pcounter", "earthbend", "dieGain", "tokAtkMe", "veil", "plumb", "minusX", "bounceOwn", "drainX", "necroSel", "spoil", "tloseX", "clearCtrs", "drainDevo", "oppLoseThat", "victimize", "prepSelf", "oppsTok", "revealMv", "attachSelf", "untapSelf", "arcum", "addType", "copyNext", "animate", "copyPick", "maze", "eachDraw", "wheelGy", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k));
       if (/where x is the number of creatures that died this turn/i.test(card.o || "")) {
         const t = room.turnNo || 0, x = seated(room).reduce((a, o) => a + (o.deaths?.t === t ? o.deaths.n || 0 : 0), 0);
         sp.effs.filter(f => f.k === "tok" && /\bX\/X\b/.test(f.desc || "")).forEach(f => { act([{ type: "create", name: f.name, n: f.n || 1, desc: f.desc.replace(/\bX\/X\b/, `${x}/${x}`), src: dispName(card) }]); logTo(code, `${dispName(card)}: ${x} creature${x === 1 ? "" : "s"} died this turn → ${x}/${x} ${f.name}`); });
@@ -3629,12 +3632,16 @@ function startController(code, pid) {
     if (k.excl?.length) return out.filter(x => !k.excl.includes(x.v));
     return out;
   }
+  // Bite / fight: my creature that deals the damage (picked in the box)
+  const biteSrcs = () => crTargets({ cr: true, only: pid });
+  const biteFrom = r => { const v = document.getElementById(`cdf-${r.id}`)?.value || r.biteV, l = biteSrcs(); return l.find(x => x.v === v) || l[0] || null; };
   function crAmount(r, c) {
     const k = r.crDmg;
     if (k.self) return { n: c.s.p, why: "" };
+    if (k.bite) { const f = biteFrom(r); if (!f) return { n: 0, why: "no creature of yours" }; const [, kd, fid] = f.v.split("|"); return ampDmg(Math.max(0, f.s.p) * k.bite, kd === "bf" ? me.bf?.[fid] : null, c.o.id !== pid); }
     return ampDmg(k.n, (r.srcId && me.bf?.[r.srcId]) || lookupCard(r.src.replace(/ \(.*\)$/, "")), c.o.id !== pid);
   }
-  const crDT = (r, c) => r.crDmg.self ? (c.s.kws || []).includes("deathtouch") : !!r.crDmg.dt || hasDeathtouch(r.srcId && me.bf?.[r.srcId], r.srcId);
+  const crDT = (r, c) => r.crDmg.self ? (c.s.kws || []).includes("deathtouch") : r.crDmg.bite ? (biteFrom(r)?.s.kws || []).includes("deathtouch") : !!r.crDmg.dt || hasDeathtouch(r.srcId && me.bf?.[r.srcId], r.srcId);
   // Vigor: "If damage would be dealt to another creature you control, prevent that damage. Put a +1/+1 counter on that creature for each 1 damage prevented"
   function vigorFor(c) {
     if (!c || c.s.pw) return null;
@@ -3651,11 +3658,13 @@ function startController(code, pid) {
   }
   const crLabel = c => `${c.o.name}: ${c.s.name} ${c.s.pw ? `(loyalty ${c.s.t})` : `${c.s.p}/${c.s.t}${c.s.dmg ? `, ${c.s.dmg} dmg` : ""}`}`;
   function crDmgBox(r) {
-    const k = r.crDmg, list = crTargets(k);
+    const k = r.crDmg, list = crTargets(k).filter(c => !k.bite || !c.v.startsWith(`${pid}|`) || !k.oppOnly);
     if (!list.length) return `<span class="mini">No legal targets right now.</span>`;
-    return `<select class="fetch-pick" id="cd-${r.id}">${list.map(c => { const a = crAmount(r, c); return `<option value="${c.v}">${esc(crLabel(c))} · ${a.n} dmg → ${crOutcome(c, a.n, crDT(r, c))}</option>`; }).join("")}</select>
+    const from = k.bite ? biteSrcs() : [];
+    if (k.bite && !from.length) return `<span class="mini">You control no creature to ${k.fight ? "fight with" : "deal the damage"}.</span>`;
+    return `${k.bite ? `<label class="mini">Your creature <select class="fetch-pick" id="cdf-${r.id}" data-a="cdf-pick" data-id="${r.id}">${from.map(c => `<option value="${c.v}" ${c.v === r.biteV ? "selected" : ""}>${esc(c.s.name)} (power ${c.s.p}${k.bite === 2 ? `, deals ${c.s.p * 2}` : ""})</option>`).join("")}</select></label>` : ""}<select class="fetch-pick" id="cd-${r.id}">${list.map(c => { const a = crAmount(r, c); return `<option value="${c.v}">${esc(crLabel(c))} · ${a.n} dmg → ${crOutcome(c, a.n, crDT(r, c))}</option>`; }).join("")}</select>
       ${k.atk ? `<label class="mini"><input type="checkbox" id="cda-${r.id}"> It's attacking (+${k.atk} to its controller)</label>` : ""}
-      <button class="btn small primary" data-a="cd-go" data-id="${r.id}">${k.self ? "Deal its power to itself" : "Deal damage"}</button>`;
+      <button class="btn small primary" data-a="cd-go" data-id="${r.id}">${k.self ? "Deal its power to itself" : k.fight ? "Fight" : "Deal damage"}</button>`;
   }
   // Deal damage to one creature / planeswalker: lethal → destroyed on its owner's phone, otherwise the damage stays marked this turn
   function dealCr(c, n, src, why, dt, exile) {
@@ -3690,7 +3699,10 @@ function startController(code, pid) {
     const a = crAmount(r, c);
     { const [, kd, tid] = v.split("|"), te = kd === "bf" ? room.players?.[oid]?.bf?.[tid] : null; const tn = te && String(te.fname || te.n).split(",")[0];
       if (te && tn && new RegExp(`^prevent all damage that would be dealt to (?:this creature|${tn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\.?$`, "im").test(te.o || lookupCard(te.n)?.o || "")) { a.n = 0; a.why = `${dispName(te)} prevents all damage dealt to it`; } }
-    const dOut = dealCr(c, a.n, r.src, a.why, crDT(r, c), !!k.exile);
+    const bf0 = k.bite ? biteFrom(r) : null;
+    if (k.bite && !bf0) { toast("You control no creature for that."); return; }
+    const dOut = dealCr(c, a.n, r.src, k.bite ? `${bf0.s.name}'s power${k.bite === 2 ? " ×2" : ""}` : a.why, crDT(r, c), !!k.exile);
+    if (k.fight && bf0 && c.v !== bf0.v) { const back = ampDmg(Math.max(0, c.s.p), null, false); setTimeout(() => { const mineNow = crTargets({ cr: true, only: pid }).find(x => x.v === bf0.v); if (mineNow) dealCr(mineNow, back.n, r.src, `${c.s.name} fights back`, (c.s.kws || []).includes("deathtouch"), false); render(); }, 0); }
     if (a.n > 0 && !/^prevented/.test(dOut)) lifelinkGain(r.llSrc || r.srcId, a.n, r.src);
     if (k.ctrl) { // Shocker: "…and 2 damage to that creature's controller"
       const o = room.players?.[oid], hit = ampDmg(k.ctrl, (r.srcId && me.bf?.[r.srcId]) || lookupCard(r.src), oid !== pid);
@@ -3767,7 +3779,7 @@ function startController(code, pid) {
     if (f.k === "remove") {
       const byOwner = {};
       cands.forEach(c => { for (let i = 0; i < many(c); i++) (byOwner[c.o.id] ||= { targets: [] }).targets.push({ kind: c.kind, id: c.id }); });
-      sendOrders(byOwner, { how: f.how, src, rider: f.rider || "", ...(f.noRegen ? { noRegen: true } : {}) });
+      sendOrders(byOwner, { how: f.how, src, ...(f.where ? { where: f.where } : {}), rider: f.rider || "", ...(f.noRegen ? { noRegen: true } : {}) });
       render(); return;
     }
     const effs = [], hits = {};
@@ -4769,7 +4781,7 @@ function startController(code, pid) {
         if (!e.tap || !fits(e)) return;
         if (e.c?.stun) { e.c.stun -= 1; if (!e.c.stun) delete e.c.stun; stunned.push(dispName(e)); return; }
         if (mine && selfNoUntap(e)) { held.push(dispName(e)); return; }
-        if (e.lockBy) { if (lockHeld(e.lockBy)) { held.push(`${dispName(e)} (${e.lockBy.src})`); return; } delete e.lockBy; }
+        if (e.lockBy) { if (e.lockBy.once) { held.push(`${dispName(e)} (${e.lockBy.src})`); if (mine) delete e.lockBy; return; } if (lockHeld(e.lockBy)) { held.push(`${dispName(e)} (${e.lockBy.src})`); return; } delete e.lockBy; }
         delete e.tap; untapNow.n++;
       });
       Object.values(p.tokens || {}).forEach(t => { if (t.tapped && fits(tokenAsPerm(t))) { untapNow.n += t.tapped; delete t.tapped; } });
@@ -4796,7 +4808,7 @@ function startController(code, pid) {
       if (!e.tap) return;
       if (isBlocked(e)) { held.add(id); notes.push(`${dispName(e)} (${blocks.find(r => permMatch(e, r.block) && statOk(e, r.stat)).src})`); return; }
       if (selfNoUntap(e)) { held.add(id); notes.push(dispName(e)); }
-      else if (lockHeld(e.lockBy)) { held.add(id); notes.push(`${dispName(e)} (${e.lockBy.src})`); }
+      else if (e.lockBy?.once || lockHeld(e.lockBy)) { held.add(id); notes.push(`${dispName(e)} (${e.lockBy.src})`); }
     });
     // anything a limit covers waits for your pick
     const picks = [];
@@ -4808,6 +4820,7 @@ function startController(code, pid) {
     });
     const waiting = new Set(picks.flatMap(p => p.opts.map(o => o.v.split("|").slice(0, 2).join("|"))));
     act([], p => {
+      Object.values(p.bf || {}).forEach(e => { if (e.lockBy?.once) delete e.lockBy; }); // "doesn't untap during its controller's next untap step": this was it
       Object.entries(p.bf || {}).forEach(([id, e]) => {
         if (!e.tap || held.has(id) || waiting.has(`bf|${id}`)) return;
         if (e.c?.stun) { e.c.stun -= 1; if (!e.c.stun) delete e.c.stun; return; }
@@ -4855,7 +4868,7 @@ function startController(code, pid) {
     expanded.delete(id);
   }
   // ----- Removal: pick targets, wait for responses, then the owner's phone carries it out -----
-  const VERB = { destroy: "Destroy", exile: "Exile", bounce: "Return to hand", airbend: "Airbend", steal: "Gain control of", phase: "Phase out", tuck: "Shuffle into library" };
+  const VERB = { destroy: "Destroy", exile: "Exile", bounce: "Return to hand", airbend: "Airbend", steal: "Gain control of", phase: "Phase out", tuck: "Shuffle into library", tolib: "Put in library:" };
   // Chaos Warp: the owner reveals their top card; a permanent card goes onto the battlefield
   function cwarpBox(r) {
     const list = (deck?.cards || []).map((c, i) => [c, i]).filter(([c]) => !/\b(Instant|Sorcery)\b/.test(c.t || "")).sort((a, b) => a[0].n.localeCompare(b[0].n));
@@ -4946,7 +4959,7 @@ function startController(code, pid) {
     logTo(code, `${me.name}: ${r.src} → ${removeLabel(f, r).toLowerCase()}`);
     const srcO = (r.srcId && me.bf?.[r.srcId]?.o) || lookupCard(r.src)?.o || "";
     const hold = f.how === "exile" && (f.hold || /leaves the battlefield, return the exiled (card|permanent)|until [^.]*leaves the battlefield/i.test(srcO)) && r.srcId ? { by: pid, srcId: r.srcId, src: r.src } : null;
-    sendOrders(byOwner, { how: f.how, src: r.src, ...(hold ? { hold } : {}), ...(f.noRegen ? { noRegen: true } : {}), rider: f.rider || "", ...(f.how === "steal" ? { until: f.until || null, untap: !!f.untap, haste: !!f.haste } : {}), ...(f.stealPlay ? { stealPlay: true } : {}), ...(f.counters ? { counters: f.counters } : {}) });
+    sendOrders(byOwner, { how: f.how, src: r.src, ...(f.where ? { where: f.where } : {}), ...(hold ? { hold } : {}), ...(f.noRegen ? { noRegen: true } : {}), rider: f.rider || "", ...(f.how === "steal" ? { until: f.until || null, untap: !!f.untap, haste: !!f.haste } : {}), ...(f.stealPlay ? { stealPlay: true } : {}), ...(f.counters ? { counters: f.counters } : {}) });
     render();
   }
   // "Life total becomes …"
@@ -5206,7 +5219,7 @@ function startController(code, pid) {
     });
     if (o.rider && /gains life equal to its power/i.test(o.rider)) Object.entries(tokHits).forEach(([k, n]) => { const t = me.tokens?.[k] || tokSnap[k]; if (t) gain += Math.max(0, Number(String(tokPTfx(t, pid, k) || "0/0").split("/")[0]) || 0) * Math.min(n, t.count || n); });
     if (o.rider && !gone.length && Object.keys(tokHits).length && !/gains life|copies of that creature/i.test(o.rider)) riders.push(o.rider);
-    const VERBED = { destroy: "destroyed", exile: "exiled", bounce: "returned to hand", airbend: "airbended", steal: "stolen", phase: "phased out", tuck: "shuffled into their library" };
+    const VERBED = { destroy: "destroyed", exile: "exiled", bounce: "returned to hand", airbend: "airbended", steal: "stolen", phase: "phased out", tuck: "shuffled into their library", tolib: `put into their library (${o.where || "top"})` };
     const names = [...gone.map(([, e]) => dispName(e)), ...Object.entries(tokHits).filter(([k]) => me.tokens?.[k]).map(([k, n]) => `${Math.min(n, me.tokens[k].count)} ${me.tokens[k].name}`)];
     const tokNames = Object.entries(tokHits).filter(([k]) => me.tokens?.[k]).map(([k, n]) => `${Math.min(n, me.tokens[k].count)} ${me.tokens[k].name}`);
     if (o.how === "bounce" && tokNames.length) {
@@ -5239,6 +5252,7 @@ function startController(code, pid) {
         if (o.how === "airbend") { p.air ||= {}; p.air[id] = { ...airKeep(e), was: JSON.parse(JSON.stringify(e)) }; }
         if (o.how === "destroy") toZone(p, e, "gy");
         if (o.how === "exile" && !o.stealPlay) toZone(p, e, "ex", o.hold ? { heldBy: o.hold } : undefined);
+        if (o.how === "tolib" && !e.cmd && !e.own && dig?.on) { if (/bottom/.test(o.where || "") && !/top/.test(o.where || "")) dig.lib.push(e.n); else if (/second/.test(o.where || "")) dig.lib.splice(1, 0, e.n); else if (/third/.test(o.where || "")) dig.lib.splice(2, 0, e.n); else if (!/choice/.test(o.where || "")) dig.lib.unshift(e.n); digSave(); }
       });
     });
     if (gain) logTo(code, `${me.name} gained ${gain} life (${o.src})`);
@@ -5349,6 +5363,11 @@ function startController(code, pid) {
       ${n.pick ? `<div class="mini"><b>Tap the card they must discard.</b></div>` : ""}
       <div class="hs-cards">${(n.cards || []).map((c, j) => `<button class="hs-card" data-a="${n.pick ? "hand-pickcard" : "hand-view"}" data-n="${nid}" data-j="${j}">${c.img ? `<img src="${esc(c.img)}" alt="" loading="lazy">` : ""}<span>${esc(c.n)}</span></button>`).join("") || `<p class="mini">Their hand is empty.</p>`}</div>
       <div class="row"><button class="btn small" data-a="note-done" data-n="${nid}">Done</button></div>
+    </div>` : n.kind === "discardn" ? `<div class="hit-box">
+      <div>🗑 <b>${esc(n.from)}</b>'s <b>${esc(n.src)}</b>: discard ${n.n === 1 ? "a card" : `${n.n} cards`}${n.random ? " at random" : " (your choice)"}.</div>
+      ${dig?.on ? `<div class="hs-list">${dig.hand.map(nm => `<label class="mode-check"><input type="checkbox" class="dn-box" data-rid="${nid}" value="${esc(nm)}"><span>${esc(nm)}</span></label>`).join("") || `<span class="mini">Your hand is empty.</span>`}</div>${n.random ? `<div class="mini">Tick nothing to let the app pick at random.</div>` : ""}`
+        : `<div class="mini">Tick what you discarded (so your graveyard is right):</div><div class="hs-list">${handDeckList().map(c => `<label class="mode-check"><input type="checkbox" class="dn-box" data-rid="${nid}" value="${esc(c.n)}"><span>${esc(dispName(c))}</span></label>`).join("")}</div>`}
+      <div class="row"><button class="btn small primary" data-a="dn-go" data-n="${nid}">Discard</button><button class="btn small" data-a="note-done" data-n="${nid}">Done</button></div>
     </div>` : n.kind === "discardask" ? `<div class="hit-box">
       <div>🗑 <b>${esc(n.from)}</b>${n.src ? `'s ${esc(n.src)}` : ""}: discard <b>${esc(n.card)}</b>.</div>
       <div class="row"><button class="btn small primary" data-a="hand-discard" data-n="${nid}">Discard it</button><button class="btn small" data-a="note-done" data-n="${nid}">Done</button></div>
@@ -5776,8 +5795,8 @@ function startController(code, pid) {
   }
   // Ty Lee: tap a creature; it doesn't untap while the source's controller still has it
   function tapLockApply(o) {
-    if (o.kind === "bf") { if (!me.bf?.[o.id]) return; mutate(p => { const e = p.bf?.[o.id]; if (e) { e.tap = true; e.lockBy = o.lock; } }); logTo(code, `🔒 ${o.byName}'s ${o.src} tapped ${me.name}'s ${dispName(me.bf[o.id])} (it stays tapped while they control ${o.src})`); }
-    else { mutate(p => { const t = p.tokens?.[o.id]; if (t) t.tapped = Math.min(t.count, (t.tapped || 0) + 1); }); logTo(code, `🔒 ${o.byName}'s ${o.src} tapped one of ${me.name}'s ${me.tokens?.[o.id]?.name || ""} tokens (keep it tapped while they control ${o.src})`); }
+    if (o.kind === "bf") { if (!me.bf?.[o.id]) return; mutate(p => { const e = p.bf?.[o.id]; if (e) { e.tap = true; if (o.lock) e.lockBy = o.lock; } }); logTo(code, `${o.lock ? "🔒" : "⤵"} ${o.byName}'s ${o.src} tapped ${me.name}'s ${dispName(me.bf[o.id])}${o.lock?.once ? " (it doesn't untap during the next untap step)" : o.lock ? ` (it stays tapped while they control ${o.src})` : ""}`); }
+    else { mutate(p => { const t = p.tokens?.[o.id]; if (t) t.tapped = Math.min(t.count, (t.tapped || 0) + 1); }); logTo(code, `${o.lock ? "🔒" : "⤵"} ${o.byName}'s ${o.src} tapped one of ${me.name}'s ${me.tokens?.[o.id]?.name || ""} tokens${o.lock?.once ? " (keep it tapped through the next untap step)" : o.lock ? ` (keep it tapped while they control ${o.src})` : ""}`); }
   }
   const lockHeld = lb => !!lb && Object.values(room?.players?.[lb.id]?.bf || {}).some(x => x.n === lb.n) && !isOut(room.players[lb.id]);
   // Sidisi / Colossal Grave-Reaver: "Whenever one or more [creature] cards are put into your graveyard from your library, …"
@@ -6181,7 +6200,7 @@ function startController(code, pid) {
       const dx = discardFromHand(c);
       logTo(code, h.plain ? `${me.name} discarded ${name}: ${h.text}${dx ? ` (exiled by ${dx.src})` : ""}` : `${me.name} channeled ${name} (discarded${dx ? `, exiled by ${dx.src}` : ""})`);
       const sp = spellAbility({ n: `${c.n} (channel)`, t: "Instant", o: h.text });
-      const effs = sp.auto ? sp.effs : sp.effs.filter(f => ["fetch", "remove", "edict", "regrow", "countersTarget", "pumpTarget", "untapN", "ping", "gyhate", "dmgCr", "wisecrack", "bane"].includes(f.k));
+      const effs = sp.auto ? sp.effs : sp.effs.filter(f => ["revealHand", "tdiscard", "tapLock", "fetch", "remove", "edict", "regrow", "countersTarget", "pumpTarget", "untapN", "ping", "gyhate", "dmgCr", "wisecrack", "bane"].includes(f.k));
       if (effs.length) act([{ type: "effects", effs, times: 1, count: 1, src: name }]);
       if (!sp.auto && !effs.length) reminders.push({ id: newId(), src: name, text: h.text, times: 1 });
       render(); return;
@@ -6534,6 +6553,7 @@ function startController(code, pid) {
   if (deck) searchEl.placeholder = `Search ${deck.name || "your deck"}…`;
   app.onchange = e => {
     if (e.target.id === "deckPick") { useDeck(e.target.value); return; }
+    if (e.target.id?.startsWith("cdf-")) { const r = reminders.find(x => x.id === e.target.dataset.id); if (r) { r.biteV = e.target.value; render(); } return; } // bite/fight: damage numbers follow the creature picked
     if (e.target.id === "cmdPick" && e.target.value) {
       deck.cmds.push(e.target.value);
       if (["Imported deck", "New deck"].includes(deck.name)) deck.name = e.target.value;
@@ -6851,6 +6871,7 @@ function startController(code, pid) {
               : r.fbGrant ? (() => { const l = Object.entries(me.gy || {}).filter(([, e]) => /\b(Instant|Sorcery)\b/.test(e.t || zoneCard(e).t || "")); return l.length ? `<select class="fetch-pick" id="fbg-${r.id}">${l.map(([id, e]) => `<option value="${id}">${esc(dispName(e))}</option>`).join("")}</select><button class="btn small primary" data-a="fbg-go" data-id="${r.id}">Grant flashback</button>` : `<span class="mini">No instant or sorcery in your graveyard (in the app).</span>`; })()
               : r.echo ? `<button class="btn small primary" data-a="echo-go" data-id="${r.id}" data-v="1">Paid ${manaHtml(r.echo.cost)}</button><button class="btn small" data-a="echo-go" data-id="${r.id}" data-v="0">🗡 Sacrifice it</button>`
               : r.relicPick ? `<select class="fetch-pick" id="rl-${r.id}">${r.relicPick.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" data-a="relic-go" data-id="${r.id}">Tap it</button>`
+              : r.revealHand || r.tdiscard ? seated(room).filter(o => !isOut(o) && (o.id !== pid || (r.revealHand || r.tdiscard).who === "player")).sort((x, y) => (x.id === pid) - (y.id === pid)).map(o => `<button class="btn small ${o.id === pid ? "" : "primary"}" data-a="${r.revealHand ? "rh-go" : "td-go"}" data-id="${r.id}" data-o="${o.id}" style="border-left:4px solid ${esc(o.color)}">${r.revealHand ? "👁" : "🗑"} ${esc(o.id === pid ? "Me" : o.name)}</button>`).join("")
               : r.tapLock ? (() => { const l = crTargets({ cr: true }).filter(c => c.v !== `${pid}|bf|${r.srcId}`); return l.length ? `<select class="fetch-pick" id="tl-${r.id}">${l.map(c => `<option value="${c.v}">${esc(c.o.id === pid ? "Mine" : c.o.name)}: ${esc(c.s.name)}</option>`).join("")}</select><button class="btn small primary" data-a="tl-go" data-id="${r.id}">Tap it</button>` : `<span class="mini">No creature to target.</span>`; })()
               : r.gyToBf ? (() => { const l = r.gyToBf.filter(([g]) => me.gy?.[g]); return l.length ? `<select class="fetch-pick" id="g2b-${r.id}">${l.map(([g, n]) => `<option value="${g}">${esc(n)}</option>`).join("")}</select><button class="btn small primary" data-a="g2b-go" data-id="${r.id}">Onto the battlefield</button>` : `<span class="mini">None of them are still in your graveyard.</span>`; })()
               : r.cumUp ? `<button class="btn small primary" data-a="cum-go" data-id="${r.id}" data-v="1">Paid${r.cumUp.life ? ` ${r.cumUp.life * r.cumUp.n} life` : ""}</button><button class="btn small" data-a="cum-go" data-id="${r.id}" data-v="0">🗡 Sacrifice it</button>`
@@ -7113,7 +7134,7 @@ function startController(code, pid) {
     }
     reminders = reminders.filter(x => x.id !== r.id);
     logTo(code, `${me.name}: ${r.src} → ${picked.map(m => m.name || m.text).join(", ")}`);
-    const PICKERS = ["revealMv", "victimize", "tloseX", "clearCtrs", "drainDevo", "dmgCr", "wisecrack", "dmgAll", "discardN", "mill", "drawFor", "gainPer", "tgain", "gyOne", "sacThen", "pumpTarget", "pumpAll", "countersTarget", "tokCopy", "tplayerTok", "edict", "handmana", "impulse", "regrow", "gyhate", "stealEx", "ping", "remove", "fetch", "adnaus", "countersEach", "tok"];
+    const PICKERS = ["revealHand", "tdiscard", "tapLock", "revealMv", "victimize", "tloseX", "clearCtrs", "drainDevo", "dmgCr", "wisecrack", "dmgAll", "discardN", "mill", "drawFor", "gainPer", "tgain", "gyOne", "sacThen", "pumpTarget", "pumpAll", "countersTarget", "tokCopy", "tplayerTok", "edict", "handmana", "impulse", "regrow", "gyhate", "stealEx", "ping", "remove", "fetch", "adnaus", "countersEach", "tok"];
     picked.filter(m => m.extra && !(m.effs.length && m.effs.every(f => PICKERS.includes(f.k)))).forEach(m => reminders.push({ id: newId(), src: r.src, text: m.text, times: r.times,
       note: m.effs.length ? "Partly applied. Handle the rest yourself." : "" }));
     picked.filter(m => m.extra && m.effs.length && m.effs.every(f => PICKERS.includes(f.k)) && /\bdraw (a|one|two|three) cards?\b/i.test(m.text) && !m.effs.some(f => /draw/i.test(f.k)))
@@ -7583,7 +7604,7 @@ function startController(code, pid) {
       if (cre) events.push({ type: "dies", n: 1, token: false, ids: [sacCard] });
     }
     if (/\{X\}/.test(ab.cost || "") && xVal == null) { xVal = Math.max(0, Math.floor(Number(prompt(`${name}: X = ?`, "1")) || 0)); }
-    let effs = ab.auto ? ab.effs : ab.effs.filter(f => ["fetch", "remove", "adnaus", "setlife", "edict", "imprint", "regrow", "impulse", "handmana", "gyhate", "countersTarget", "countersEach", "tokCopy", "tplayerTok", "untapAll", "untapN", "ping", "pumpTarget", "pumpAll", "controlTurn", "swap", "prolif", "tempt", "oracle", "drawPer", "regen", "copyAllTokens", "tgain", "gyOne", "sacThen", "drawFor", "gainPer", "mill", "copyCreature", "suspect", "manaAny", "dmgTurn", "noPreventTurn", "dmgCr", "wisecrack", "bane", "radiant", "extraCombat", "untapAttacked", "rummage", "dmgAll", "discardN", "copySpell", "dmgPer", "doublePow", "dmgDef", "pcounter", "earthbend", "dieGain", "tokAtkMe", "veil", "plumb", "minusX", "bounceOwn", "drainX", "necroSel", "spoil", "tloseX", "clearCtrs", "drainDevo", "oppLoseThat", "victimize", "prepSelf", "oppsTok", "revealMv", "attachSelf", "untapSelf", "arcum", "addType", "copyNext", "animate", "copyPick", "maze", "eachDraw", "wheelGy", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k));
+    let effs = ab.auto ? ab.effs : ab.effs.filter(f => ["revealHand", "tdiscard", "tapLock", "fetch", "remove", "adnaus", "setlife", "edict", "imprint", "regrow", "impulse", "handmana", "gyhate", "countersTarget", "countersEach", "tokCopy", "tplayerTok", "untapAll", "untapN", "ping", "pumpTarget", "pumpAll", "controlTurn", "swap", "prolif", "tempt", "oracle", "drawPer", "regen", "copyAllTokens", "tgain", "gyOne", "sacThen", "drawFor", "gainPer", "mill", "copyCreature", "suspect", "manaAny", "dmgTurn", "noPreventTurn", "dmgCr", "wisecrack", "bane", "radiant", "extraCombat", "untapAttacked", "rummage", "dmgAll", "discardN", "copySpell", "dmgPer", "doublePow", "dmgDef", "pcounter", "earthbend", "dieGain", "tokAtkMe", "veil", "plumb", "minusX", "bounceOwn", "drainX", "necroSel", "spoil", "tloseX", "clearCtrs", "drainDevo", "oppLoseThat", "victimize", "prepSelf", "oppsTok", "revealMv", "attachSelf", "untapSelf", "arcum", "addType", "copyNext", "animate", "copyPick", "maze", "eachDraw", "wheelGy", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k));
     if (anyX != null) effs = effs.map(f => f.k === "ping" && f.n === "that" ? { ...f, n: anyX } : f);
     if (xVal != null) effs = effs.map(f => f.k === "pumpTarget" ? { ...f, dp: String(f.dp).replace(/x/i, xVal), dt: String(f.dt).replace(/x/i, xVal) } : f);
     const selfX = xVal != null && String(ab.text).match(/and (?:this creature|[A-Z][^,]*?) gets \+X\/\+0 until end of turn/);
@@ -7621,7 +7642,7 @@ function startController(code, pid) {
     { const em = String(ab.text || "").match(/^you get an emblem with "(.+)"\.?$/i); if (em) { mutate(p => { p.emblems = [...(p.emblems || []), { text: em[1], src: name }]; }); logTo(code, `🏅 ${me.name} got an emblem (${name}): ${em[1]}`); } }
     actTold(e, ab, name);
     logTo(code, `${me.name} activated ${name}: ${ab.label}`);
-    const pickerOnly = (!ab.auto && effs.length && effs.every(f => f.k === "maze")) || !ab.auto && effs.length && effs.every(f => ["fetch", "remove", "imprint", "regrow", "impulse", "gyhate", "edict", "countersTarget", "tokCopy", "tplayerTok", "pumpTarget", "regen", "copyCreature", "manaAny", "dmgCr", "wisecrack", "bane", "radiant", "clearCtrs", "tloseX", "oppLoseThat", "drainDevo", "victimize", "revealMv", "arcum", "ping", "addType", "animate", "maze", "copyPick", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k) || (f.k === "mill" && /target/i.test(f.who || ""))) && !/\b(then|and) (draw|you|each|create|put|gain|lose|deal)/i.test(ab.text);
+    const pickerOnly = (!ab.auto && effs.length && effs.every(f => f.k === "maze")) || !ab.auto && effs.length && effs.every(f => ["revealHand", "tdiscard", "tapLock", "fetch", "remove", "imprint", "regrow", "impulse", "gyhate", "edict", "countersTarget", "tokCopy", "tplayerTok", "pumpTarget", "regen", "copyCreature", "manaAny", "dmgCr", "wisecrack", "bane", "radiant", "clearCtrs", "tloseX", "oppLoseThat", "drainDevo", "victimize", "revealMv", "arcum", "ping", "addType", "animate", "maze", "copyPick", "blink", "copyTrig", "transformSelf", "reenterFace", "exileRetMine"].includes(f.k) || (f.k === "mill" && /target/i.test(f.who || ""))) && !/\b(then|and) (draw|you|each|create|put|gain|lose|deal)/i.test(ab.text);
     if ((!ab.auto || ab.partial) && !le && !pickerOnly && !/exiled card an opponent owns with a void counter|copy (the exiled card|a card exiled with)/i.test(ab.text)) reminders.push({ id: newId(), src: name, text: ab.text, times: 1,
       note: ab.auto ? "Partly applied. Handle the rest yourself." : (c.sacWhat && !tokKey && !sc) || c.sacOther ? "Sacrifice what the cost asks for yourself." : "",
       ...(() => { const dn = !ab.effs?.some(f => /draw/i.test(f.k)) && String(ab.text).match(/\bdraws? (a|one|two|three|four|five) cards?/i); return dn ? { drawN: ({ a: 1, one: 1, two: 2, three: 3, four: 4, five: 5 })[dn[1].toLowerCase()] } : {}; })() }); // loots: a Drew button for the draw part
@@ -9285,7 +9306,7 @@ function startController(code, pid) {
       case "tl-go": {
         const r = reminders.find(x => x.id === b.dataset.id), v = document.getElementById(`tl-${b.dataset.id}`)?.value;
         if (!r || !v) break;
-        const [oid, kind, tid] = v.split("|"), lock = { id: pid, n: (me.bf?.[r.srcId]?.n) || r.src, src: r.src };
+        const [oid, kind, tid] = v.split("|"), lock = r.tapLock?.noLock ? (r.tapLock.lockNext ? { once: true, src: r.src } : null) : { id: pid, n: (me.bf?.[r.srcId]?.n) || r.src, src: r.src };
         reminders = reminders.filter(x => x !== r);
         if (oid === pid) tapLockApply({ kind, id: tid, lock, src: r.src, byName: me.name });
         else sendOrders({ [oid]: {} }, { how: "tapLock", kind, id: tid, lock, src: r.src });
@@ -10424,6 +10445,32 @@ function startController(code, pid) {
         logTo(code, `👁 ${me.name} declined to show ${n.from} their hand`); break;
       }
       case "hand-view": { const n = room.notes?.[pid]?.[b.dataset.n], c = n?.cards?.[Number(b.dataset.j)]; if (c) showCard(deckCard(c.n) || lookupCard(c.n) || { n: c.n, t: "", o: "", img: c.img }); break; }
+      case "rh-go": case "td-go": {
+        const r = reminders.find(x => x.id === b.dataset.id), oid = b.dataset.o, o = room.players?.[oid]; if (!r || !o) break;
+        reminders = reminders.filter(x => x !== r);
+        if (b.dataset.a === "rh-go") {
+          const f = r.revealHand, why = `${r.src}${f.pick ? `: you pick ${f.what ? `a ${f.what} card` : "a card"} for them to discard` : ""}`;
+          if (oid === pid) reminders.push({ id: newId(), src: r.src, text: f.pick ? `Reveal your hand; an opponent picks ${f.what ? `a ${f.what} card` : "a card"} for you to discard.` : "Reveal your hand.", times: 1 });
+          else { sendNote(oid, { kind: "handask", fromId: pid, src: why, pick: !!f.pick }); if (f.pick) commitCrime("target"); }
+          logTo(code, `👁 ${me.name}'s ${r.src}: ${o.name} reveals their hand${f.pick ? ` (${me.name} picks a card to discard)` : ""}`);
+        } else {
+          const f = r.tdiscard;
+          if (oid === pid) reminders.push(normalizeRem({ id: newId(), src: r.src, text: `Discard ${f.n === 1 ? "a card" : `${f.n} cards`}${f.random ? " at random" : ""}.`, times: 1, impulse: { n: f.n, cards: [], toGy: true } }));
+          else { sendNote(oid, { kind: "discardn", fromId: pid, n: f.n, random: !!f.random, src: r.src }); commitCrime("target"); }
+          logTo(code, `🗑 ${me.name}'s ${r.src}: ${o.name} discards ${f.n === 1 ? "a card" : `${f.n} cards`}${f.random ? " at random" : ""}`);
+        }
+        render(); break;
+      }
+      case "dn-go": { // my discards for an opponent's "target player discards N cards"
+        const nid = b.dataset.n, n = room.notes?.[pid]?.[nid]; if (!n) break;
+        let names = [...document.querySelectorAll(`.dn-box[data-rid="${nid}"]:checked`)].map(x => x.value);
+        if (dig?.on && n.random && !names.length) { const h = [...dig.hand]; for (let i = 0; i < Math.min(n.n, h.length); i++) names.push(h.splice(Math.floor(Math.random() * h.length), 1)[0]); }
+        if (names.length > n.n && !confirm(`${n.from}'s ${n.src} makes you discard ${n.n}. Discard all ${names.length} ticked?`)) break;
+        names.forEach(nm => { if (dig?.on) { const i = dig.hand.indexOf(nm); if (i >= 0) dig.hand.splice(i, 1); } discardFromHand(deckCard(nm) || lookupCard(nm) || { n: nm }); });
+        if (dig?.on) { digSave(); setTimeout(renderHand, 0); }
+        update(ref(db, `rooms/${code}/notes/${pid}`), { [nid]: null });
+        logTo(code, `🗑 ${me.name} discarded ${names.length ? names.join(", ") : "nothing logged"} (${n.from}'s ${n.src})`); break;
+      }
       case "hand-pickcard": {
         const nid = b.dataset.n, n = room.notes?.[pid]?.[nid], c = n?.cards?.[Number(b.dataset.j)]; if (!c) break;
         if (!confirm(`Make ${n.from} discard ${c.n}?`)) break;

@@ -90,6 +90,8 @@ export function permanentMatches(e, f) {
   return true;
 }
 export function parseRemoval(text) {
+  { const tb = text.match(/\bput target ([a-z ]+?) (?:on top of|on the bottom of|into) its owner's library(?: (second|third) from the top)?/i) || text.match(/\btarget ([a-z ]+?)'s owner puts it on (?:their|his or her) choice of the top or bottom of (?:their|his or her) library/i);
+    if (tb && !/\bcard\b/i.test(tb[1])) return { k: "remove", how: "tolib", n: 1, what: tb[1].trim(), filter: parseTargetFilter(tb[1]), rider: "", where: /bottom of its owner's/i.test(tb[0]) ? "bottom" : /choice of the top or bottom/i.test(tb[0]) ? "top or bottom (their choice)" : tb[2] ? `${tb[2].toLowerCase()} from the top` : "top" }; }
   const cw = text.match(/\bthe owner of target ([a-z ]+?) shuffles it into their library/i);
   if (cw) return { k: "remove", how: "tuck", n: 1, what: cw[1].trim(), filter: parseTargetFilter(cw[1]), rider: /reveals the top card of their library\. if it's a permanent card, they put it onto the battlefield/i.test(text) ? "chaoswarp" : "" };
   // Gaining control: "gain control of target creature until end of turn", Insurrection, Hostage Taker
@@ -393,7 +395,7 @@ function parseEffects0(text, cardName = "") {
   { const xc = text.match(/deals X damage to any target, where X is the number of ([a-z]+?)s you control/i); if (xc) { for (let i = effs.length - 1; i >= 0; i--) if (effs[i].k === "ping") effs.splice(i, 1); effs.push({ k: "ping", n: { count: xc[1].toLowerCase() } }); } }
   if (/deals damage equal to that creature's power to any target/i.test(text)) effs.push({ k: "ping", n: { enterPow: true } });
   { const wd = text.match(/deals damage equal to the number of ([a-z]+) counters on it to any target/i); if (wd) effs.push({ k: "ping", n: { ctr: counterKey(wd[1]) } }); }
-  { const mp = text.match(/deal damage to target creature equal to the number of ([a-z]+?)s? you control/i); if (mp) effs.push({ k: "dmgCr", n: { count: mp[1].toLowerCase() }, pw: false, cr: true, opp: false }); }
+  { const mp = text.match(/deals? damage to target creature equal to the number of ([a-z]+?)s? you control/i); if (mp) effs.push({ k: "dmgCr", n: { count: mp[1].toLowerCase() }, pw: false, cr: true, opp: false }); }
   { const og = text.match(/gain life equal to the number of ([a-z]+?)s? you control/i); if (og && !effs.some(f => f.k === "gainPer")) effs.push({ k: "gain", n: { count: og[1].toLowerCase() } }); }
   // Jeskai Ascendancy: "creatures you control get +1/+1 until end of turn. Untap those creatures."
   if (/until end of turn\. untap those creatures/i.test(text)) effs.push({ k: "untapAll", what: "creatures", filter: parseTargetFilter("creature"), mine: true });
@@ -446,11 +448,30 @@ function parseEffects0(text, cardName = "") {
   const pg = text.match(/deals (\d+|one|two|three|x) damage to any target/i);
   if (pg) effs.push({ k: "ping", n: num(pg[1]) || 1 });
   // "deals 4 damage to target creature" (Thunder Magic, Flame Slash…): a creature picker that shows whether it dies
-  const dcr = !pg && text.match(/deals (\d+|one|two|three|four|five|six|seven|eight|x) damage to (?:up to one )?(?:another )?target (creature or planeswalker|creature|planeswalker)( an opponent controls| you don't control| that player controls)?/i);
+  const dcr = !pg && text.match(/deals (\d+|one|two|three|four|five|six|seven|eight|x) damage to (?:up to one )?(?:another )?target ((?:(?:attacking or blocking|attacking|blocking|tapped|untapped|non[a-z]+|white|blue|black|red|green|artifact|legendary) )*creature(?: with flying| without flying| with power \d+ or (?:less|greater))?(?: or planeswalker)?|planeswalker)( an opponent controls| you don't control| that player controls)?/i);
   const dctl = text.match(/and (\d+) damage to that (?:creature|permanent)'s controller/i);
   const dEach = !dcr && text.match(/deals (\d+|one|two|three|x) damage to each of up to (two|three|four) target (creatures|creatures and\/or planeswalkers)/i);
   if (dEach) for (let i = 0; i < num(dEach[2]); i++) effs.push({ k: "dmgCr", n: num(dEach[1]) ?? 0, pw: /planeswalker/i.test(dEach[3]), cr: true, opp: false, upTo: true });
   if (dcr && !/divided|each other/i.test(text) && (dctl || !/and \d+ damage to/i.test(text))) effs.push({ k: "dmgCr", n: num(dcr[1]) ?? 0, pw: /planeswalker/i.test(dcr[2]), cr: /creature/i.test(dcr[2]), opp: !!dcr[3], ...(dctl ? { ctrl: Number(dctl[1]) } : {}), ...(/if that creature would die this turn, exile it instead/i.test(text) ? { exile: true } : {}) });
+  // Bite and fight: "Target creature you control deals damage equal to its power to target creature you don't control" / "… fights target creature …"
+  { const b1 = text.match(/\btarget creature you control deals damage equal to (twice )?its power to (?:another |up to one )*target (creature or planeswalker|creature|planeswalker)( you don't control| an opponent controls)?/i);
+    const b2 = !b1 && text.match(/\bchoose target creature you control and target (creature or planeswalker|creature|planeswalker)( you don't control| an opponent controls)?\. (?:that|the first|the creature you control) (?:creature )?deals damage equal to (twice )?its power to/i);
+    const bt = b1 ? { twice: !!b1[1], w: b1[2], opp: b1[3] } : b2 ? { twice: !!b2[3], w: b2[1], opp: b2[2] } : null;
+    const fg = !bt && text.match(/\btarget creature you control fights (?:another |up to one )*target creature( you don't control| an opponent controls)?/i);
+    if (bt && !effs.some(f => f.k === "dmgCr")) effs.push({ k: "dmgCr", n: 0, bite: bt.twice ? 2 : 1, pw: /planeswalker/i.test(bt.w), cr: /creature/i.test(bt.w), opp: !!bt.opp });
+    if (fg && !effs.some(f => f.k === "dmgCr")) effs.push({ k: "dmgCr", n: 0, bite: 1, fight: true, pw: false, cr: true, opp: !!fg[1] }); }
+  // "Target opponent reveals their hand. You choose a noncreature, nonland card from it. That player discards that card." (Duress, Thoughtseize): ask them to show their hand
+  { const rh = text.match(/\btarget (opponent|player) reveals (?:their|his or her) hand\.(?: you (?:may )?choose an? ([^.]*?) from it\. (?:that player|they) discards? (?:that card|it))?/i);
+    if (rh) effs.push({ k: "revealHand", who: rh[1].toLowerCase(), pick: !!rh[2] || /you choose [^.]* from (?:it|among them)[^.]*\. (?:that player|they) discards/i.test(text), what: rh[2] ? rh[2].replace(/\s*card\b/i, "").trim() : ((text.match(/you (?:may )?choose an? ([^.]*?) card from it( with [^.]+)?\./i) || []).slice(1).filter(Boolean).join("")) }); }
+  // Justice Strike: "Target creature deals damage to itself equal to its power."
+  if (/\btarget creature deals damage to itself equal to its power\b/i.test(text) && !effs.some(f => f.k === "wisecrack")) effs.push({ k: "wisecrack", atk: 0 });
+  // "Target player discards two cards" (they choose)
+  { const td = !/reveals (?:their|his or her) hand/i.test(text) && text.match(/\btarget (player|opponent) discards (a|one|two|three|four|\d+) cards?( at random)?/i);
+    if (td) effs.push({ k: "tdiscard", n: num(td[2]) || 1, who: td[1].toLowerCase(), random: !!td[3] }); }
+  // "Tap target creature." / "Tap up to two target creatures." (no lock)
+  { const tp = !effs.some(f => f.k === "tapLock") && text.match(/(?:^|\. )tap (?:up to (one|two|three) |(two|three) )?target (creatures?|artifacts? or creatures?|creatures? or artifacts?|nonland permanents?|permanents?)(?: (?:an opponent controls|you don't control|your opponents control))?\./i);
+    const held = /(?:doesn't|don't) untap during (?:its|their) controllers?'?s? untap steps? for as long as you control/i.test(text);
+    if (tp) { const k = num(tp[1] || tp[2]) || 1; for (let i = 0; i < k; i++) effs.push({ k: "tapLock", what: tp[3].replace(/s\b/g, ""), ...(held ? {} : { noLock: true }), lockNext: /(?:doesn't|don't) untap during (?:its|their) controllers?'?s? next untap steps?/i.test(text) }); } }
   // Board damage: Pyroclasm, Blasphemous Act, Chain Reaction, Earthquake
   const da = text.match(/deals (\d+|x|one|two|three|four|five|six|seven|thirteen) damage to each (other )?(creature(?: and each planeswalker)?(?: without flying)?(?: with flying)?|creature your opponents control|creature you don't control|creature and planeswalker(?: your opponents control)?)( and each (?:player|opponent))?/i);
   if (da) effs.push({ k: "dmgAll", n: /^x$/i.test(da[1]) ? (/where x is the number of creatures on the battlefield/i.test(text) ? "creatures" : "X") : (num(da[1]) ?? (da[1].toLowerCase() === "thirteen" ? 13 : 0)),
@@ -1615,7 +1636,9 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         }
         if (f.k === "protect") { p.prot = { src, life: !!f.life, all: !!f.all }; ctx.logs.push(`🛡 ${src}: ${f.all ? "protection from everything" : ""}${f.all && f.life ? " · " : ""}${f.life ? "life total can't change" : ""} until their next turn`); }
         if (f.k === "ping") ctx.remind.push({ src, srcId, text: "", ping: { n: f.n && f.n.enterPow ? (() => { const id = ctx.curEv?.id || ctx.curEv?.ids?.[0], x = id && p.bf?.[id]; if (x) return (Number(x.p) || 0) + (x.c?.p1p1 || 0) - (x.c?.m1m1 || 0); const tk = ctx.curEv?.list?.[0]; return Number((String(tk?.desc || "").match(/^(\d+)\//) || [])[1]) || 0; })() : f.n, left: 1, ...(f.playerOnly ? { playerOnly: true } : {}) }, thenEffs: [], times: 1 });
-        if (f.k === "dmgCr") ctx.remind.push({ src, srcId, text: "", crDmg: { n: f.n, pw: f.pw, cr: f.cr, oppOnly: f.opp, ...(f.ctrl ? { ctrl: f.ctrl } : {}), ...(f.exile ? { exile: true } : {}), ...(f.upTo ? { grp: true } : {}) }, times: 1 });
+        if (f.k === "revealHand") ctx.remind.push({ src, srcId, text: "", revealHand: f, times: 1 });
+        if (f.k === "tdiscard") ctx.remind.push({ src, srcId, text: "", tdiscard: f, times: 1 });
+        if (f.k === "dmgCr") ctx.remind.push({ src, srcId, text: "", crDmg: { n: f.n, pw: f.pw, cr: f.cr, oppOnly: f.opp, ...(f.bite ? { bite: f.bite, ...(f.fight ? { fight: true } : {}) } : {}), ...(f.ctrl ? { ctrl: f.ctrl } : {}), ...(f.exile ? { exile: true } : {}), ...(f.upTo ? { grp: true } : {}) }, times: 1 });
         if (f.k === "dmgPer") ctx.remind.push({ src, srcId, text: "", dmgPer: f, times: 1 });
         if (f.k === "wisecrack") ctx.remind.push({ src, srcId, text: "", crDmg: { self: true, atk: f.atk, cr: true }, times: 1 });
         if (f.k === "bane") ctx.remind.push({ src, srcId, text: "", bane: {}, times: 1 });
@@ -1664,7 +1687,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (f.k === "addType") ctx.remind.push({ src, srcId, text: `Target ${f.what} becomes ${/^[aeiou]/i.test(f.type) ? "an" : "a"} ${f.type.toLowerCase()} in addition to its other types until end of turn.`, addType: f, times: 1 });
         if (f.k === "copyNext") { p.riders = [...(p.riders || []).filter(x => x.turnNo === ctx.turnNo), { kind: "copyNext", ctype: f.type, src, at: Date.now(), turnNo: ctx.turnNo }]; ctx.logs.push(`⚙ ${src}: your next ${f.type} spell this turn gets copied`); }
         if (f.k === "arcum") ctx.remind.push({ src, srcId, text: "Target artifact creature's controller sacrifices it, then may search for a noncreature artifact and put it onto the battlefield.", arcum: true, times: 1 });
-        if (f.k === "tapLock") ctx.remind.push({ src, srcId, text: `Tap up to one target ${f.what}. It doesn't untap while you control ${src}.`, tapLock: { what: f.what }, times: 1 });
+        if (f.k === "tapLock") ctx.remind.push({ src, srcId, text: f.noLock ? `Tap target ${f.what}.${f.lockNext ? " It doesn't untap during its controller's next untap step." : ""}` : `Tap up to one target ${f.what}. It doesn't untap while you control ${src}.`, tapLock: { what: f.what, ...(f.noLock ? { noLock: true } : {}), ...(f.lockNext ? { lockNext: true } : {}) }, times: 1 });
         if (f.k === "exileRetMine" && !f.pick) { let k = 0; p.ex ||= {}; Object.entries(p.bf || {}).forEach(([id, x]) => { if (!/\bCreature\b/.test(x.t || "") || x.own) return; p.ex[id] = { n: x.n, t: x.t || "", m: x.m || "", img: x.img || "", ...(x.o ? { o: x.o } : {}), retEnd: true, src, at: Date.now() }; delete p.bf[id]; k++; });
           let tk = 0; if (!f.nontoken) Object.entries(p.tokens || {}).forEach(([key, t]) => { if (isCreatureToken(t.name)) { tk += t.count || 0; delete p.tokens[key]; } });
           ctx.logs.push(`⚙ ${src}: exiled ${k} creature${k === 1 ? "" : "s"}${tk ? ` (${tk} token${tk === 1 ? "" : "s"} gone for good)` : ""} — they return at the beginning of the next end step`); }
