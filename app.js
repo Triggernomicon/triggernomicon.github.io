@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261031a";
+import { firebaseConfig } from "./config.js?v=20261031b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261031b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -805,10 +805,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31a";
+const APP_VERSION = "2026.10.31b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -1706,6 +1706,14 @@ function startController(code, pid) {
       Object.entries(p.bf || {}).forEach(([id, e]) => { if (!bfBefore[id] && /\b(Artifact|Creature)\b/.test(e.t || "") && !e.own && !e.tapped) untapEnt.push(e.nick || e.n); });
       Object.entries(p.bf || {}).forEach(([id, e]) => { if (!bfBefore[id] && /\bCreature\b/.test(e.t || "") && !e.own) { entered += 1; enteredNames.push(e.nick || e.n); enteredPT.push({ id, p: Number(e.p) || 0, t: Number(e.tg) || 0, ty: e.t || "" }); } }); }, !!opts.merge);
     if (enteredPT.length && Object.values(me.bf || {}).some(e => /^Evolve\b/m.test(e.o || lookupCard(e.n)?.o || ""))) setTimeout(() => evolveCheck(enteredPT), 0);
+    { // Renata, Grumgully, Sage of Fables, Tromell: "Each other [non-Human / Wizard / nontoken] creature you control enters with an additional +1/+1 counter on it"
+      const rs = Object.entries(me.bf || {}).map(([gid, x]) => [gid, x, String(x.o || lookupCard(x.n)?.o || "").replace(/\([^)]*\)/g, "").match(/^(?:each )?other (nontoken |non-?([a-z]+) )?(?:([a-z]+) )?creatures? you control enters? with (?:an )?additional (?:(\w+) )?\+1\/\+1 counters? on (?:it|them)\.?$/im)]).filter(([, , m]) => m);
+      const newToks = enteredPT.filter(x => !x.id).length;
+      rs.forEach(([gid, g, m]) => { const n = m[4] && m[4] !== "an" ? (({ two: 2, three: 3 })[m[4].toLowerCase()] || Number(m[4]) || 1) : 1;
+        const ent = enteredPT.filter(x => x.id && x.id !== gid && (!m[2] || !new RegExp(`\\b${m[2]}\\b`, "i").test(x.ty || "")) && (!m[3] || new RegExp(`\\b${m[3]}\\b`, "i").test(x.ty || "")));
+        if (ent.length) setTimeout(() => { mutate(p => ent.forEach(x => { const y = p.bf?.[x.id]; if (y) { y.c ||= {}; y.c.p1p1 = (y.c.p1p1 || 0) + n; } })); logTo(code, `⚙ ${dispName(g)}: +${n} +1/+1 counter${n === 1 ? "" : "s"} on ${ent.length === 1 ? "the entering creature" : `${ent.length} entering creatures`}`); }, 0);
+        const tokTs = enteredNames.filter(x => / tokens?$/.test(x)).map(x => tokenPerm({ name: x.replace(/^\d+ /, "").replace(/ tokens?$/, "") }).t);
+        if (newToks && !m[1] && tokTs.some(t => (!m[2] || !new RegExp(`\\b${m[2]}\\b`, "i").test(t)) && (!m[3] || new RegExp(`\\b${m[3]}\\b`, "i").test(t)))) reminders.push({ id: newId(), src: dispName(g), srcId: gid, text: `New creature tokens enter with an additional +1/+1 counter${m[3] ? ` (${m[3]}s only)` : m[2] ? ` (not ${m[2]}s)` : ""}: add it on the token.`, times: 1 }); }); }
     { const gs = Object.entries(me.bf || {}).map(([gid, x]) => [gid, x, String(x.o || lookupCard(x.n)?.o || "").match(/[Ee]ach other ([A-Z][a-z]+) you control enters with an additional \+1\/\+1 counter on it for each \1 you already control/)]).filter(([, , m]) => m);
       gs.forEach(([gid, g, m]) => { const typ = new RegExp(`\\b${m[1]}\\b`), ent = enteredPT.filter(x => x.id && x.id !== gid && typ.test(x.ty || "")); if (!ent.length) return;
         const already = Object.entries(bfBefore).filter(([bid, x]) => typ.test(x.t || "")).length;

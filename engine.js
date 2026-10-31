@@ -81,6 +81,7 @@ export function permanentMatches(e, f) {
     : !w.startsWith("non") && changelingHas(e, w) ? true
     : w.startsWith("non") ? !new RegExp(`\\b${reEsc(w.slice(3).replace(/^-/, ""))}`, "i").test(t)
     : COLOR_LETTER[w] ? new RegExp(`\\{[^}]*${COLOR_LETTER[w]}`).test(e.m || "")
+    : w === "colorless" || w === "multicolored" || w === "monocolored" ? (k => w === "colorless" ? k === 0 && !/\bLand\b/.test(t) : w === "multicolored" ? k > 1 : k === 1)("WUBRG".split("").filter(c => new RegExp(`\\{[^}]*${c}`).test(e.m || "")).length) // Herald of Kozilek: "colorless spells"
     : new RegExp(`\\b${reEsc(w)}`, "i").test(t);
   if (f.alts.length && !f.alts.some(a => a.every(ok))) return false;
   if (f.mv) { const v = manaValue(e.m); if (f.mv.op === "<=" ? v > f.mv.val : v < f.mv.val) return false; }
@@ -884,7 +885,7 @@ export function parseAbilities(card) {
     // Bilbo, Fellow Conspirator: "If you would create a Food token, instead create a Food token and a Treasure token."
     m = line.match(/^if you would create an? ([a-z]+) token, instead create an? \1 token and an? ([a-z]+) token/i);
     if (m) { out.repl.push({ kind: "plusOn", on: capName(m[1]), name: capName(m[2]) }); continue; }
-    if (/^if one or more \+1\/\+1 counters would be put on an? (creature|permanent|artifact or creature) you control, that many plus one/.test(low)) { out.repl.push({ kind: "cplus", n: 1, p1p1: true, ...(/(permanent|artifact or creature) you control/.test(low) ? { perm: true } : {}) }); continue; }
+    if (/^if one or more \+1\/\+1 counters would be put on an? (creature|permanent|artifact or creature|creature or vehicle) you control, that many plus one/.test(low)) { out.repl.push({ kind: "cplus", n: 1, p1p1: true, ...(/(permanent|artifact or creature|creature or vehicle) you control/.test(low) ? { perm: true } : {}) }); continue; }
     if (/(counters? would be put on (?:a|an) (?:creature|permanent|artifact or creature)(?:, spacecraft, or planet)?(?:[^,]* you control)?|if an effect would put one or more counters on a permanent you control|^if you would put one or more counters on a permanent or player)[^.]*twice that many/.test(low)) {
       out.repl.push({ kind: "cdouble", p1p1: /\+1\/\+1 counters would/.test(low) }); continue;
     }
@@ -2079,7 +2080,7 @@ export function drawCount(text) {
 // ----- Table rules: cost changes and casting restrictions from permanents (Grand Arbiter, Thalia, Rule of Law, Lavinia…) -----
 // who: "opp" (the permanent's controller's opponents), "you" (its controller), "all"
 const whoOf = t => /\b(your opponents|each opponent|opponents)\b/i.test(t) ? "opp" : /\byou cast\b|\byou can't\b/i.test(t) ? "you" : "all";
-const spellFilter = pre => parseTargetFilter((pre || "").replace(/^(each|a|an)\s+/i, "").trim() || "permanent");
+const spellFilter = pre => parseTargetFilter((pre || "").replace(/^(each|a|an)\s+/i, "").replace(/ spells and /gi, " or ").trim() || "permanent"); // the Familiars: "Blue spells and red spells"
 const staticCache = new Map();
 export function staticRules(o) {
   if (!o) return [];
@@ -2088,6 +2089,7 @@ export function staticRules(o) {
   o.replace(/\([^)]*\)/g, "").split(/\n|(?<=\.)\s+/).map(x => x.trim().replace(/^(?:static ability|[A-Z][a-z]+(?: [A-Z]?[a-z]+)?) — (?=[A-Z])/i, "")).filter(Boolean).forEach(line => {
     let m;
     if (/^(when|whenever|at the beginning|\{|[+−-]\d|\w+ — )/i.test(line)) return; // triggered/activated abilities aren't static rules
+    line = line.replace(/^(\w+) spells and (\w+) spells\b/i, "$1 or $2 spells"); // the Familiars: "Blue spells and red spells you cast cost {1} less"
     if ((m = line.match(/^(.*?)\bspells?\b(.*?)\bcosts? \{(\d+)\} (more|less) to cast for each creature you control with a \+1\/\+1 counter on it\.?$/i)) && !/that targets?|this spell/i.test(line)) {
       out.push({ kind: "cost", who: whoOf(m[2] + " " + m[1]), filter: spellFilter(m[1]), n: Number(m[3]), less: m[4].toLowerCase() === "less", per: "p1p1creature", when: null, text: line });
     } else if ((m = line.match(/^(.*?)\bspells?\b(.*?)\bcosts? \{(\d+)\} (more|less) to cast for each ([a-z]+?)s? you control\.?$/i)) && !/that targets?|this spell/i.test(line)) {
@@ -2200,7 +2202,7 @@ export function staticBuffs(card) {
     let subj = m[2].toLowerCase().trim();
     if (/\b(spells?|cards?|players?|lands? you|abilities|opponents?)\b/.test(subj) && !/creature/.test(subj)) return;
     if (/^(each|target|up to|that|those|another)\b/.test(subj)) return;
-    if (!/(creature|token|s)$/.test(subj)) return; // a plural subject: "creatures", "Elf creatures", "Spiders", "creature tokens"
+    if (!/(creature|token|s)$/.test(subj) && !/^(?:[a-z]+(?:,| and) )*(?:merfolk|kithkin|aetherborn|treefolk|eldrazi|mice|oxen|samurai|kor|sheep|fish)$/.test(subj)) return; // a plural subject: "creatures", "Elf creatures", "Spiders", "creature tokens"; plurals without an s: "Merfolk", "Kithkin", "Mice", "Oxen"
     let dp = 0, dt = 0, kws = [];
     const rest = m[5].trim();
     const pt = rest.match(/^([+−-]\d+)\/([+−-]\d+)(?: and (?:have|gain) (.+))?$/);
