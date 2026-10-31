@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031b";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031b";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031b";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261031b";
+import { firebaseConfig } from "./config.js?v=20261031c";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031c";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031c";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031c";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -248,9 +248,39 @@ function buffsOn(e, ownerId, id, isToken) {
     const r = buffsOn0(e, ownerId, id, isToken); BUFF_CACHE.set(key, r); return { dp: r.dp, dt: r.dt, kws: [...r.kws], from: [...r.from] }; }
   return buffsOn0(e, ownerId, id, isToken);
 }
+// Is a conditional static's condition met right now? (src: the permanent with the ability, sid: its id, ow: its owner)
+const CB_COL = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
+function condMet(c, ow, src, sid) {
+  if (!c || !ow) return false;
+  const fits = x => { const t = x.t || "", w = c.t;
+    if (!(w === "permanent" ? !/\b(Instant|Sorcery)\b/.test(t) : new RegExp(`\\b${w}\\b`, "i").test(t))) return false;
+    if (!c.adj) return true; if (CB_COL[c.adj]) return new RegExp(`\\{[^}]*${CB_COL[c.adj]}`).test(x.m || "");
+    return c.adj === "nonbasic" ? !/\bBasic\b/.test(t) : new RegExp(`\\b${c.adj}\\b`, "i").test(t); };
+  const count = o => Object.entries(o?.bf || {}).filter(([k, x]) => !(o === ow && k === sid) && fits(x)).length + Object.values(o?.tokens || {}).filter(t => fits({ t: tokenPerm(t).t, m: "" })).reduce((a, t) => a + (t.count || 0), 0);
+  const opps = Object.values(tablePlayers).filter(o => o && o !== ow);
+  switch (c.k) {
+    case "ctrl": return c.opp ? opps.some(o => count(o) >= c.n) : count(ow) >= c.n;
+    case "gy": return Object.keys(ow.gy || {}).length >= c.n;
+    case "oppgy": return opps.some(o => Object.keys(o.gy || {}).length >= c.n);
+    case "gytypes": return new Set(Object.values(ow.gy || {}).flatMap(g => ["Artifact", "Battle", "Creature", "Enchantment", "Instant", "Kindred", "Land", "Planeswalker", "Sorcery"].filter(t => new RegExp(`\\b${t}\\b`).test(g.t || "")))).size >= c.n;
+    case "lifeAtLeast": return (ow.life ?? 40) >= c.n;
+    case "lifeAtMost": return c.opp ? opps.some(o => (o.life ?? 40) <= c.n) : (ow.life ?? 40) <= c.n;
+    case "equipped": return attachedTo(ow, sid, false).some(([, a]) => /\bEquipment\b/.test(a.t || ""));
+    case "untapped": return !src?.tap;
+    case "tapped": return !!src?.tap;
+    case "monstrous": return !!src?.monstrous;
+  }
+  return false;
+}
 function buffsOn0(e, ownerId, id, isToken) {
   const out = { dp: 0, dt: 0, kws: [], from: [] };
   if (!ownerId) return out;
+  { const ow = tablePlayers[ownerId], add = (b, src) => { out.dp += b.dp; out.dt += b.dt; if (b.dp || b.dt) out.from.push({ src, dp: b.dp, dt: b.dt }); b.kws.forEach(k => out.kws.push({ k, src })); };
+    if (ow) {
+      if (!isToken) condBuffs(e).forEach(b => { if (b.who === "self" && condMet(b.cond, ow, e, id)) add(b, "itself"); });
+      if (!isToken) attachedTo(ow, id, false).forEach(([aid, a]) => condBuffs(a).forEach(b => { if (b.who === "att" && condMet(b.cond, ow, a, aid)) add(b, dispName(a)); }));
+      if (/\bCreature\b/.test(e.t || "") || isToken) Object.entries(ow.bf || {}).forEach(([sid, x]) => condBuffs(x).forEach(b => { if (!/^team/.test(b.who) || (b.who === "team-other" && sid === id && !isToken)) return; if (condMet(b.cond, ow, x, sid)) add(b, dispName(x)); }));
+    } }
   if (e?.adj && (e.adj.p || e.adj.t)) { out.dp += e.adj.p || 0; out.dt += e.adj.t || 0; out.from.push({ src: "manual adjustment", dp: e.adj.p || 0, dt: e.adj.t || 0 }); } // ✎ set by hand on the phone
   { const k = coatOf(e, id, isToken); if (k) { out.dp += k; out.dt += k; out.from.push({ src: "Coat of Arms", dp: k, dt: k }); } }
   { const o = String(e.o || ""), ow = tablePlayers[ownerId];
@@ -805,10 +835,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31b";
+const APP_VERSION = "2026.10.31c";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031b" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031c" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen

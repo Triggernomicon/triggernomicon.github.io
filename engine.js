@@ -2979,3 +2979,45 @@ function csbFor(p, ctx, hand) {
   CSB.memo.set(sig, res);
   return res;
 }
+
+// Conditional statics: "This creature gets +2/+2 as long as you control a Dinosaur", "As long as there are seven or more cards in your graveyard, creatures you control get +1/+1",
+// "Enchanted creature has flying as long as it's untapped". The app checks the condition against the board.
+const condBuffCache = new Map();
+const CB_NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+function condOf(c) {
+  c = c.trim().toLowerCase(); let m;
+  if ((m = c.match(/^(you|an opponent) controls? (a|an|another|one|two|three|four|five|six|seven|eight|\d+)( or more)? (?:other )?((?:legendary|basic|snow|nonbasic|white|blue|black|red|green|artifact|enchantment) )?([a-z]+?)s?$/))) {
+    const t = m[5]; if (/^(card|token|nonland|player|spell|counter)$/.test(t) || (t === "permanent" && !m[4])) return null; // "a red permanent" is fine
+    return { k: "ctrl", opp: m[1] !== "you", n: CB_NUM[m[2]] || Number(m[2]) || 1, another: m[2] === "another", adj: (m[4] || "").trim(), t }; }
+  if ((m = c.match(/^(?:there are (\w+) or more cards in your graveyard|(\w+) or more cards are in your graveyard)$/))) return { k: "gy", n: CB_NUM[m[1] || m[2]] || Number(m[1] || m[2]) };
+  if ((m = c.match(/^there are (\w+) or more card types among cards in your graveyard$/))) return { k: "gytypes", n: CB_NUM[m[1]] || Number(m[1]) };
+  if ((m = c.match(/^you have (\d+) or more life$/))) return { k: "lifeAtLeast", n: Number(m[1]) };
+  if ((m = c.match(/^(you have|an opponent has) (\d+) or less life$/))) return { k: "lifeAtMost", n: Number(m[2]), opp: m[1] !== "you have" };
+  if ((m = c.match(/^an opponent has (\w+) or more cards in their graveyard$/))) return { k: "oppgy", n: CB_NUM[m[1]] || Number(m[1]) };
+  if (/^(?:this creature|it|this [a-z]+) is equipped$/.test(c)) return { k: "equipped" };
+  if (/^(?:this creature|it|this [a-z]+)(?:'s| is) untapped$/.test(c)) return { k: "untapped" };
+  if (/^(?:this creature|it)(?:'s| is) tapped$/.test(c)) return { k: "tapped" };
+  if (/^(?:this creature|it) is monstrous$/.test(c)) return { k: "monstrous" };
+  return null;
+}
+export function condBuffs(card) {
+  const o = card?.o || ""; if (!o || !/as long as/i.test(o)) return [];
+  const key = (card.n || "") + "|" + o; if (condBuffCache.has(key)) return condBuffCache.get(key);
+  const out = [], short = String(card.n || "").split("#")[0].split(" // ")[0].split(",")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const KW = "flying|first strike|double strike|deathtouch|lifelink|vigilance|trample|haste|reach|menace|hexproof|indestructible|shroud";
+  const KL = `((?:${KW})(?:,? (?:and )?(?:${KW}))*)`;
+  const SELF = `(?:this creature|this artifact|this vehicle|it|${short || "\\u0000"})`, EFF = `(?:gets? ([+-]\\d+)/([+-]\\d+)(?: and ha(?:s|ve) ${KL})?|ha(?:s|ve) ${KL})`;
+  o.split("\n").forEach(raw => {
+    const l = raw.replace(/\s*\([^)]*\)/g, "").trim().replace(/^[A-Z][A-Za-z' ]{2,30} — /, "");
+    if (/^as long as you have \d+ or more life, this creature gets/i.test(l)) return; // Serra Ascendant: handled on its own
+    let who = null, g = null, m;
+    for (const [re, w] of [[new RegExp(`^${SELF} ${EFF} as long as (.+)\\.$`, "i"), "self"], [new RegExp(`^(enchanted|equipped) creature ${EFF} as long as (.+)\\.$`, "i"), "att"], [new RegExp(`^(other )?creatures you control ${EFF} as long as (.+)\\.$`, "i"), "team"]])
+      if ((m = l.match(re))) { const gg = m.slice(1); g = gg.slice(-5); who = w === "team" ? (gg[0] ? "team-other" : "team") : w; break; }
+    if (!who) for (const [re, w] of [[new RegExp(`^as long as (.+?), ${SELF} ${EFF}\\.$`, "i"), "self"], [new RegExp(`^as long as (.+?), (enchanted|equipped) creature ${EFF}\\.$`, "i"), "att"], [new RegExp(`^as long as (.+?), (other )?creatures you control ${EFF}\\.$`, "i"), "team"]])
+      if ((m = l.match(re))) { const gg = m.slice(1); g = [...gg.slice(-4), gg[0]]; who = w === "team" ? (gg[1] ? "team-other" : "team") : w; break; }
+    if (!who) return;
+    const cond = condOf(g[4]); if (!cond) return;
+    out.push({ who, dp: Number(g[0] || 0), dt: Number(g[1] || 0), kws: String(g[2] || g[3] || "").split(/,? and |, /).map(x => x.trim().toLowerCase()).filter(Boolean), cond, text: l });
+  });
+  condBuffCache.set(key, out); return out;
+}
