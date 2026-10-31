@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031c";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031c";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031c";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031c";
+import { firebaseConfig } from "./config.js?v=20261031d";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031d";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031d";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031d";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -397,25 +397,36 @@ const kwHas = (kws, k) => (kws || []).includes(k);
 const VIGOR_RE = /if damage would be dealt to another creature you control, prevent that damage\. put a \+1\/\+1 counter on that creature for each 1 damage prevented this way/i;
 let modLookup = null; // the app's card lookup, for module-level helpers
 function vigorOn(owner, kind, id) { return Object.entries(owner?.bf || {}).some(([vid, x]) => !(kind === "bf" && vid === id) && VIGOR_RE.test(x.o || modLookup?.(x.n)?.o || "")); }
+// Restriction text a creature carries: its own lines plus what its Auras / Equipment say about it ("Enchanted creature can't block" → "This creature can't block")
+const CANT_BLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) can't (?:attack or )?block(?:,| and can't be blocked|\.?$)/im;
+const UNBLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) (?:can't block and )?can't be blocked\.?$/im;
+function restrText(o, atts) {
+  const extra = (atts || []).flatMap(a => String(a.o || modLookup?.(a.n)?.o || "").split("\n"))
+    .map(l => l.replace(/\s*\([^)]*\)/g, "").replace(/ and has "[^"]*"/g, "").replace(/\. .*$/, ".").replace(/can't attack, block, or (?:crew vehicles|transform)/i, "can't attack or block").trim())
+    .filter(l => /^(?:enchanted|equipped) (?:creature|permanent) /i.test(l) && /can't (?:attack|block|be blocked)|can block only|must be blocked/i.test(l))
+    .map(l => l.replace(/^(?:enchanted|equipped) (?:creature|permanent) /i, "This creature ").replace(/^This creature (?:gets [+−-]\d+\/[+−-]\d+|has [a-z ]+?)(?:,| and) (?:(?:has [a-z ]+?|gets [+−-]\d+\/[+−-]\d+),? (?:and )?)?/i, "This creature ").replace(/, and its activated abilities[^.]*/i, "").replace(/, and is goaded/i, ""));
+  return extra.length ? `${o}${o ? "\n" : ""}${extra.join("\n")}` : o;
+}
 function combatStats(owner, kind, id) {
   if (!owner) return null;
   if (kind === "bf") {
     const e = owner.bf?.[id];
     if (!e || !/\bCreature\b/.test(e.t || "")) return null;
     const [p, t] = String(ptOf(e, countsFor(owner), owner.id, id) || "0/0").split("/").map(x => Number(x) || 0);
-    const o = String(e.o || "");
+    const o = restrText(String(e.o || ""), attachedTo(owner, id, false).map(([, a]) => a));
     return { name: dispName(e), p, t, kws: kwsOf(e, owner.id, id).map(x => x.k), avail: e.tap ? 0 : 1, count: 1, regen: !!owner.shields?.[`bf:${id}`],
       colors: colorsOf(e.m), type: e.t || "", o, ownerName: owner.name,
-      cantBlock: !!e.suspect || /^(?:this creature|[^.\n]*?) can't block\.?$/im.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't block"),
+      cantBlock: !!e.suspect || CANT_BLOCK_RE.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't block"),
       indestr: /^(.*,\s*)?indestructible\b/im.test(o) || !!e.c?.x_indestructible || kwsOf(e, owner.id, id).some(x => x.k === "indestructible"),
-      unblock: /^(?:this creature|[^.\n]*?) can't be blocked\.?$/im.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked"), vig: vigorOn(owner, kind, id) };
+      unblock: UNBLOCK_RE.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked"), vig: vigorOn(owner, kind, id) };
   }
   const t = owner.tokens?.[id];
   if (!t || !isCreatureToken(t.name)) return null;
   const [p, tg] = String(tokPTfx(t, owner.id, id) || "1/1").split("/").map(x => Number(x) || 0);
   const kws = kwsOf(tokenPerm(t), owner.id, id, true).map(x => x.k);
-  return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block"), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked"), regen: !!t.sh,
-    colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: "", ownerName: owner.name, vig: vigorOn(owner, "tok", id) };
+  const to = restrText("", eqList(t).map(sid => owner.bf?.[sid]).filter(Boolean));
+  return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block") || CANT_BLOCK_RE.test(to), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked") || UNBLOCK_RE.test(to), regen: !!t.sh,
+    colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: to, ownerName: owner.name, vig: vigorOn(owner, "tok", id) };
 }
 const COLOR_NAMES = { W: "white", U: "blue", B: "black", R: "red", G: "green" };
 const colorsOf = m => [...new Set((String(m || "").match(/[WUBRG]/g) || []))];
@@ -448,7 +459,13 @@ function canBlock(a, b, defender) {
   const byPow = ao.match(/can't be blocked by creatures with power (\d+) or (less|greater)/i);
   if (byPow && (byPow[2].toLowerCase() === "less" ? b.p <= Number(byPow[1]) : b.p >= Number(byPow[1]))) return `power ${byPow[2].toLowerCase() === "less" ? "≤" : "≥"} ${byPow[1]}`;
   const byType = !byPow && ao.match(/can't be blocked by ([A-Za-z ]+?)s?(?: creatures)?(?:\.|$)/m);
-  if (byType && !/more than one|except/i.test(byType[0]) && new RegExp(`\\b${byType[1].trim()}`, "i").test(b.type || "")) return `can't be blocked by ${byType[1].trim()}s`;
+  if (byType && !/more than one|except/i.test(byType[0])) { const w = byType[1].trim().toLowerCase(), col = Object.entries(COLOR_NAMES).find(([, n]) => n === w.split(" ")[0])?.[0];
+    if (col ? b.colors?.includes(col) : new RegExp(`\\b${byType[1].trim()}`, "i").test(b.type || "")) return `can't be blocked by ${byType[1].trim()}${col ? " creatures" : "s"}`; }
+  // Howlgeist: "Creatures with power less than this creature's power can't block it."
+  if (/creatures with power less than (?:this creature's|its) power can't block it/i.test(ao) && b.p < a.p) return `power below ${a.p}`;
+  // the blocker's own limits: "can't block creatures with power 2 or greater"
+  const bPow = bo.match(/^this creature can't block creatures with power (\d+) or (greater|less)\.?$/im);
+  if (bPow && (bPow[2].toLowerCase() === "greater" ? a.p >= Number(bPow[1]) : a.p <= Number(bPow[1]))) return `it can't block power ${bPow[2].toLowerCase() === "greater" ? "≥" : "≤"} ${bPow[1]}`;
   // the blocker's own limits: "can block only creatures with flying"
   if (/can block only creatures with flying/i.test(bo) && !kwHas(a.kws, "flying")) return "it can only block flyers";
   if (kwHas(a.kws, "flying") && !kwHas(b.kws, "flying") && !kwHas(b.kws, "reach")) return "flying";
@@ -475,6 +492,32 @@ function fightOut(a, b) {
   const tramp = kwHas(a.kws, "trample") ? Math.max(0, total - (kwHas(a.kws, "deathtouch") ? 1 : b.indestr ? b.t : b.t)) : 0;
   return { aDies, bDies, tramp };
 }
+// Can `owner`'s creature (bf id) attack `defender`? "" if nothing stops it, else the reason (the app only warns: players can still go ahead)
+function attackWhy(owner, id, defender) {
+  const e = owner?.bf?.[id];
+  if (!e) return "";
+  const s = combatStats(owner, "bf", id);
+  if (!s) return "";
+  const o = s.o, kws = s.kws || [], name = s.name;
+  if (kwHas(kws, "defender") && !/can attack (?:this turn )?as though (?:it|they) didn't have defender/i.test(o)) return `${name} has defender`;
+  if (/^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) can't attack(?: or block|, block, or crew vehicles)?(?:,|\.?$)/im.test(o)) return `${name} can't attack`;
+  const un = o.match(/^(?:this creature|[^.\n]*?) can't attack unless defending player controls an? ([a-z]+)\.?$/im);
+  if (un && defender && !Object.values(defender.bf || {}).some(x => new RegExp(`\\b${un[1]}\\b`, "i").test(x.t || ""))) return `${defender.name} controls no ${un[1]}`;
+  if (/^(?:this creature|[^.\n]*?) can't attack unless defending player is the monarch/im.test(o) && defender && !defender.effects?.monarch) return `${defender.name} isn't the monarch`;
+  if (/^[^\n]*attacks each combat if able and can't attack you\b/im.test(o)) { const aura = attachedTo(owner, id, false).map(([, a]) => a).find(a => /can't attack you/i.test(a.o || modLookup?.(a.n)?.o || "")); if (aura && owner.id === defender?.id) return "it can't attack you"; }
+  const fly = kwHas(kws, "flying"), iw = kwHas(kws, "islandwalk");
+  for (const [who, list] of [["any", Object.values(tablePlayers)], ["def", defender ? [defender] : []]]) for (const p of list) for (const x of Object.values(p?.bf || {})) {
+    const t = String(x.o || modLookup?.(x.n)?.o || ""), src = `${p.id === defender?.id ? `${p.name}'s ` : ""}${dispName(x)}`;
+    if (who === "any") {
+      if (/^creatures without flying or islandwalk can't attack\.?$/im.test(t) && !fly && !iw) return `${src}: creatures without flying or islandwalk can't attack`;
+      if (/^creatures without flying can't attack\.?$/im.test(t) && !fly) return `${src}: creatures without flying can't attack`;
+    } else {
+      if (/^creatures can't attack you\.?$/im.test(t)) return `${src}: creatures can't attack ${p.name}`;
+      if (/^creatures without flying can't attack you\.?$/im.test(t) && !fly) return `${src}: creatures without flying can't attack ${p.name}`;
+    }
+  }
+  return "";
+}
 // Every creature `defender` could block `a` with, and how it goes
 // 🛡 who is already blocking this combat (kept on the player, so Undo takes it back too)
 let tableCombat = ""; // this combat (turn + extra-combat number), set with the table state
@@ -488,7 +531,9 @@ function blockPreview(a, defender) {
     if (n && !/can block (?:an additional|any number of|two|three)/i.test(b.o || "")) { b.avail = Math.max(0, b.avail - n); b.blocking = n; } });
   rows.forEach(b => { b.why = b.blocking && b.avail <= 0 ? "already blocking" : canBlock(a, b, defender); b.out = b.why ? null : fightOut(a, b); });
   const able = rows.filter(b => !b.why);
-  return { rows, able, killers: able.filter(b => b.out.aDies && !b.out.bDies), trades: able.filter(b => b.out.aDies && b.out.bDies), menace: kwHas(a.kws, "menace") || /can't be blocked except by (?:two|three) or more creatures/i.test(a.o || "") };
+  const ao = String(a.o || "");
+  const oneBlock = /^(?:this creature|[^.\n]*?) can't be blocked by more than one creature\.?$/im.test(ao), lure = /^(?:this creature|[^.\n]*?) must be blocked(?: each combat)? if able\.?$/im.test(ao);
+  return { oneBlock, lure, rows, able, killers: able.filter(b => b.out.aDies && !b.out.bDies), trades: able.filter(b => b.out.aDies && b.out.bDies), menace: kwHas(a.kws, "menace") || /can't be blocked except by (?:two|three) or more creatures/i.test(a.o || "") };
 }
 const outText = (b, mine) => !b.out ? `can't block (${b.why})` : b.vig && !mine && !b.out.aDies ? "🛡 Vigor: it takes no damage, gets +1/+1 counters instead" : b.out.aDies && b.out.bDies ? "⚖ trade: both die" : b.out.aDies ? (mine ? "❌ blocks and kills yours, survives" : "✅ blocks and kills it, survives") : b.out.bDies ? (mine ? "✅ yours kills it" : "❌ your blocker dies") : "🛡 nothing dies";
 // Can `casterId` target this permanent? (shroud, hexproof, protection from everything / from the chosen player)
@@ -835,10 +880,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31c";
+const APP_VERSION = "2026.10.31d";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031c" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031d" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2560,11 +2605,11 @@ function startController(code, pid) {
     const a = myAtkStats(kind, id);
     if (!a) return `<span class="mini">It isn't a creature right now.</span>`;
     return `<div class="atk-plan"><div class="mini">${esc(a.name)} ${a.p}/${a.t}${a.kws.length ? ` · ${esc(a.kws.join(", "))}` : ""}${n > 1 ? ` · ${n} attacking` : ""}</div>${opponents().filter(o => !isOut(o)).map(o => {
-      const pv = blockPreview(a, { ...o, id: o.id });
-      const warn = pv.killers.length ? `⚠ ${pv.killers.map(b => `${b.name} ${b.p}/${b.t}`).join(", ")} could block and kill it` : pv.trades.length ? `⚖ ${pv.trades.map(b => b.name).join(", ")} could trade with it` : "";
-      return `<details class="plan-opp" ${warn ? "open" : ""}><summary style="border-left:4px solid ${esc(o.color)}"><b>${esc(o.name)}</b>: ${pv.able.length ? `${pv.able.length} could block${pv.menace ? " (menace: needs 2)" : ""}` : "✅ nothing can block it"}${warn ? ` · <span class="plan-warn">${esc(warn)}</span>` : ""}</summary>
+      const pv = blockPreview(a, { ...o, id: o.id }), noAtk = kind === "bf" ? attackWhy(tablePlayers[pid] || { ...me, id: pid }, id, { ...o, id: o.id }) : "";
+      const warn = noAtk ? `🚫 It can't attack ${o.name}: ${noAtk}` : pv.killers.length ? `⚠ ${pv.killers.map(b => `${b.name} ${b.p}/${b.t}`).join(", ")} could block and kill it` : pv.trades.length ? `⚖ ${pv.trades.map(b => b.name).join(", ")} could trade with it` : "";
+      return `<details class="plan-opp" ${warn ? "open" : ""}><summary style="border-left:4px solid ${esc(o.color)}"><b>${esc(o.name)}</b>: ${noAtk ? `🚫 can't attack (${esc(noAtk)})` : pv.able.length ? `${pv.able.length} could block${pv.menace ? " (menace: needs 2)" : ""}${pv.oneBlock ? " (only one can block it)" : ""}${pv.lure ? " (must be blocked if able)" : ""}` : "✅ nothing can block it"}${warn ? ` · <span class="plan-warn">${esc(warn)}</span>` : ""}</summary>
         ${pv.rows.length ? pv.rows.map(b => `<div class="mini plan-row ${b.out ? "" : "muted"}">${esc(b.name)} <b>${b.p}/${b.t}</b>${b.count > 1 ? ` ×${b.avail}/${b.count}` : ""}${b.kws.length ? ` <i>${esc(b.kws.join(", "))}</i>` : ""} — ${esc(outText(b, true))}${b.out?.tramp ? ` · ${b.out.tramp} tramples over` : ""}</div>`).join("") : `<div class="mini muted">No creatures.</div>`}
-      </details><button class="btn small ${warn ? "" : "primary"}" ${kind === "bf" ? `data-a="plan-go" data-id="${r.id}"` : `data-a="tok-atk" data-k="${esc(id)}"`} data-o="${o.id}">⚔ Attack ${esc(o.name)}${pv.killers.length ? " anyway" : ""}</button>`;
+      </details><button class="btn small ${warn ? "" : "primary"}" ${kind === "bf" ? `data-a="plan-go" data-id="${r.id}"` : `data-a="tok-atk" data-k="${esc(id)}"`} data-o="${o.id}">⚔ Attack ${esc(o.name)}${pv.killers.length || noAtk ? " anyway" : ""}</button>`;
     }).join("")}</div>`;
   }
   // Attack with a creature card (after the preview); oid = who it attacks
@@ -5281,7 +5326,7 @@ function startController(code, pid) {
         <button class="btn small primary" data-a="hit-take" data-n="${nid}">Take damage</button>
         ${n.trample ? "" : `<button class="btn small" data-a="hit-block" data-n="${nid}" title="Blocked by something the app doesn't list">Blocked (other)</button>`}</div>
       ${n.stats && !n.res ? (() => { const pv = blockPreview(n.stats, { ...me, id: pid }), no = pv.rows.filter(b => b.why);
-        return `<div class="blk-pick"><div class="mini"><b>🛡 Declare blockers</b>${pv.menace ? " · menace: needs 2 or more" : ""}${(n.times || 1) > 1 ? ` · blocks one of the ${n.times}` : ""}</div>
+        return `<div class="blk-pick"><div class="mini"><b>🛡 Declare blockers</b>${pv.menace ? " · menace: needs 2 or more" : ""}${pv.oneBlock ? " · it can't be blocked by more than one creature" : ""}${pv.lure ? " · it must be blocked if able" : ""}${(n.times || 1) > 1 ? ` · blocks one of the ${n.times}` : ""}</div>
         ${pv.able.length ? `<div class="modes">${pv.able.map(b => b.kind === "tok" && b.avail > 1
           ? `<label class="mode-check blk"><input type="number" class="blk-num x-input" data-n="${nid}" data-v="${b.kind}:${esc(b.id)}" min="0" max="${b.avail}" value="0" inputmode="numeric"><span>${esc(b.name)} <b>${b.p}/${b.t}</b> <span class="muted">(how many? ${b.avail} untapped)</span><span class="mini blk-out">${esc(outText(b, false))}</span></span></label>`
           : `<label class="mode-check blk"><input type="checkbox" class="blk-box" data-n="${nid}" value="${b.kind}:${esc(b.id)}"><span>${esc(b.name)} <b>${b.p}/${b.t}</b><span class="mini blk-out">${esc(outText(b, false))}</span></span></label>`).join("")}</div>
@@ -10338,6 +10383,7 @@ function startController(code, pid) {
         if (!picks.length) { toast("Tick the creature(s) that block."); break; }
         const a = n.stats, pv = blockPreview(a, { ...me, id: pid });
         const bl = picks.map(v => { const i = v.indexOf(":"); return pv.rows.find(r => r.kind === v.slice(0, i) && r.id === v.slice(i + 1)); }).filter(Boolean);
+        if (pv.oneBlock && bl.length > 1 && !confirm(`${n.src} can't be blocked by more than one creature.\n\nBlock with ${bl.length} anyway?`)) break;
         if (pv.menace && bl.length < 2 && !confirm(`${n.src} has menace: it can't be blocked except by two or more creatures.\n\nBlock with just one anyway?`)) break;
         const dt = kwHas(a.kws, "deathtouch"), total = kwHas(a.kws, "double strike") ? a.p * 2 : a.p;
         let aDies, dies = null, tramp = 0;
