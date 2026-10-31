@@ -673,6 +673,7 @@ function parseCond(cond, cardName) {
   if (/^(?:this land|[a-z ,'-]+?) or another land you control enters$/.test(c)) return { ev: "land" };
   if (/^the ring tempts you$/.test(c)) return { ev: "tempt" };
   if (/^you fully unlock a room$/.test(c)) return { ev: "fullUnlock" }; // Eerie
+  { const cm = c.match(/^(?:your commander|a commander you control) (enters|attacks)$/); if (cm) return { ev: "cmd", enters: cm[1] === "enters", attacks: cm[1] === "attacks" }; } // We Ride at Dawn, Nakia, Keleth
   { const sc = c.match(/^you (scry or surveil|surveil or scry|scry|surveil)$/); if (sc) return { ev: "scry", kinds: sc[1].split(" or ") }; } // Arwen, Matoya (the app fires it when a scry or surveil reminder is done)
   { const ul = c.match(/^you unlock (this door|.+)$/); if (ul) return { ev: "unlock", door: ul[1] === "this door" ? null : ul[1] }; } // a Room's door (the app names each door on the battlefield)
   if (/^a creature token you control leaves the battlefield$/.test(c)) return { ev: "tokleave", once: false };
@@ -751,6 +752,8 @@ function parseCond(cond, cardName) {
   m = c.match(/(?:a|an|another) ([\w-]+) you control is put into a graveyard/);
   if (m) return { ev: "sac", what: m[1] };
   if (/a land (you control )?enters|a land enters the battlefield under your control/.test(c)) return { ev: "land" };
+  { const kw = c.match(/^(a|another) (nontoken )?creature (you control )?with (flying|deathtouch|trample|lifelink|haste|vigilance|reach|first strike|double strike|menace|defender|hexproof|indestructible) enters$/); // Waterkin Shaman: "a creature you control with flying"
+    if (kw) return { ev: "creature", nontoken: !!kw[2], other: kw[1] === "another", kwEnt: kw[4] }; }
   // Faramir ("a legendary creature you control with mana value 4 or greater"), Tocasia's Welcome, Doc Ock's Tentacles, Wildborn Preserver ("another non-Human creature")
   { const cq = c.match(/^(a|another|one or more) (other )?(nontoken )?((?:(?:legendary|non-[a-z]+|[a-z]+) )*?)creatures? you control(?: with mana value (\d+) or (greater|less))? enters?$/);
     if (cq && (cq[5] || /\bnon-/.test(cq[4]))) { const pre = cq[4].trim().split(/\s+/).filter(Boolean);
@@ -779,7 +782,7 @@ function parseCond(cond, cardName) {
   m = c.match(/(an opponent|a player|another player|enchanted opponent) draws (a card|one or more cards|cards?|their (?:first|second) card each turn)/);
   if (m) return { ev: "oppdraw", once: /one or more/.test(m[2]), self: m[1] === "a player", exceptFirst: /except the first one they draw in each of their draw steps/.test(c), ...(/second card each turn/.test(m[2]) ? { nth: 2 } : /first card each turn/.test(m[2]) ? { nth: 1 } : {}), ...(m[1] === "enchanted opponent" ? { enchOpp: true } : {}) };
   m = c.match(/(an opponent|a player|another player|each opponent) casts (an(?= )|a(?= )|their first|their second|another)? ?(.*?) ?spell(?: with mana value (\d+) or (less|greater))?/);
-  if (m) return { ...(/with the same name as/.test(c) ? { check: true } : {}), ev: "oppcast", what: m[3] || "", self: m[1] === "a player", first: m[2] === "their first", ...(m[2] === "their second" ? { nth: 2 } : {}), ...(m[4] ? (m[5] === "less" ? { mvMax: Number(m[4]) } : { mvMin: Number(m[4]) }) : {}) };
+  if (m) return { ...(/with the same name as/.test(c) ? { check: true } : {}), ...(/ during your turn$/.test(c) ? { turn: "mine", askIfUnknown: "Only during your turn." } : / during (?:their|an opponent's) turn$/.test(c) ? { turn: "opp", askIfUnknown: "Only during their turn." } : {}), ev: "oppcast", what: m[3] || "", self: m[1] === "a player", first: m[2] === "their first", ...(m[2] === "their second" ? { nth: 2 } : {}), ...(m[4] ? (m[5] === "less" ? { mvMax: Number(m[4]) } : { mvMin: Number(m[4]) }) : {}) };
   m = c.match(/you cast (?:(an|a|your first|your second|your third|another) )?(.*?) ?spell(?: with mana value (\d+) or greater)?/);
   if (m) m = [m[0], m[2], m[3], m[1]];
   if (m) return { ev: "cast", ...(/ during an opponent's turn$/.test(c) ? { turn: "opp", askIfUnknown: "Only during an opponent's turn." } : / during your turn$/.test(c) ? { turn: "mine", askIfUnknown: "Only during your turn." } : {}), ...(/^your (second|third)$/.test(m[3] || "") && !m[1] ? { nth: { "your second": 2, "your third": 3 }[m[3]] } : {}), what: (m[1] || "").replace(/\s*from anywhere other than your hand/, ""), ...(m[2] ? { mvMin: Number(m[2]) } : {}), ...(/from anywhere other than your hand/.test(c) ? { notHand: true } : {}), ...(/\bspell from exile$/.test(c) ? { fromEx: true } : {}), ...(/\bspell from your graveyard$/.test(c) ? { fromGy: true } : {}) };
@@ -834,6 +837,8 @@ export function kwExpand(o) {
     .replace(/^(When|Whenever) ([^,\n]+?) enters or ((?:a|an|another) [^,\n]+? dies), ([^\n]+)/gm, (_, w, who, b, e) => `${w} ${who} enters, ${e}\nWhenever ${b}, ${e}`)
     // Eerie: "Whenever an enchantment you control enters and whenever you fully unlock a Room, …": two triggers, one effect
     .replace(/^((?:[^—\n]{1,40} — )?)(Whenever [^,\n]+?) and whenever ([^,\n]+), ([^\n]+)/gm, (_, pre, a, b, e) => `${pre}${a}, ${e}\nWhenever ${b}, ${e}`)
+    // "Whenever your commander enters or attacks, …" (Search for Dagger, Norn's Choirmaster): two triggers, one effect
+    .replace(/^(Whenever (?:your commander|a commander you control)) enters or attacks, ([^\n]+)/gm, (_, w, e) => `${w} enters, ${e}\n${w} attacks, ${e}`)
     // "When this artifact enters and when you sacrifice it, …" (Carrot Cake, Heaped Harvest)
     .replace(/^(When this [a-z]+ enters) and (when you sacrifice it), ([^\n]+)/gm, (_, a, b, e) => `${a}, ${e}\nWhen you sacrifice it, ${e}`)
     // "Whenever Millicent or another nontoken Spirit you control dies or deals combat damage to a player, …"
@@ -865,7 +870,7 @@ export function parseAbilities(card) {
     line = line.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
     line = line.replace(/^[^—:{}]{1,60} — /, ""); // ability words like "Landfall —"
     const low = line.toLowerCase();
-    if (/token/.test(low) && /twice that many/.test(low)) { out.repl.push({ kind: "double" }); continue; }
+    if (/^if (?:an effect would create one or more tokens|one or more tokens would be created)\b[^.]*twice that many/.test(low)) { out.repl.push({ kind: "double" }); continue; } // Doubling Season, Parallel Lives (not Tainted Adversary's "create twice that many", not Kaya's −2)
     if (/(?:counters would be put on an artifact or creature you control|if you would put one or more counters on a permanent you control), (?:put )?that many plus one of each of those kinds/.test(low)) { out.repl.push({ kind: "cplus", n: 1, perm: true }); continue; }
     if (/creature tokens would be created under your control, three times that many/.test(low)) { out.repl.push({ kind: "triple", creature: true }); continue; }
     let m = line.match(/those tokens plus (that many|an additional|a|an|one) (.*?)tokens? (?:are|is) created instead/i) || line.match(/instead create those tokens plus (that many|an additional|a|an|one) (.*?)tokens?\.?$/i);
@@ -996,7 +1001,7 @@ export function parseAbilities(card) {
   return out;
 }
 
-const COND_LABEL = { scry: "when you scry or surveil", unlock: "when you unlock this door", fullUnlock: "when you fully unlock a Room",
+const COND_LABEL = { cmd: "when your commander enters/attacks", scry: "when you scry or surveil", unlock: "when you unlock this door", fullUnlock: "when you fully unlock a Room",
   phase: "at the start of a phase", oppcast: "when an opponent casts", oppdraw: "when an opponent draws", "self-etb": "when it enters/attacks", tokens: "when you create tokens", sac: "when you sacrifice",
   land: "landfall", creature: "when a creature enters", tempt: "when the Ring tempts you", ringbearer: "when you choose a Ring-bearer", cast: "when you cast", dies: "when a creature dies",
   selfdies: "when it dies", selfsac: "when you sacrifice it", selftap: "when it becomes tapped", youdraw: "when you draw", gainlife: "when you gain life", discard: "when you discard",
@@ -1171,7 +1176,7 @@ export function countTypes(p, types, excludeId) {
 }
 
 // Set by matches() when a condition depends on something the event doesn't say (which card was discarded, whose turn it is): the trigger then asks instead of applying
-let condUnknown = false, curMyTurn = null;
+let condUnknown = false, curMyTurn = null, curCmds = [];
 const turnOk = cond => { if (!cond.turn) return true; if (curMyTurn == null) { condUnknown = true; return true; } return cond.turn === "mine" ? curMyTurn : !curMyTurn; };
 const typeFits = (t, phrase) => String(phrase).split(/,? or /).some(alt => alt.split(/,\s*|\s+/).filter(Boolean).every(w => /^non-?/.test(w) ? !new RegExp(`\\b${w.replace(/^non-?/, "")}\\b`, "i").test(t || "") : new RegExp(`\\b${w}\\b`, "i").test(t || "")));
 const discardCount = (cond, ev) => { if (!cond.dType) return cond.once ? 1 : ev.n || 1; if (!ev.ts) { condUnknown = true; return cond.once ? 1 : ev.n || 1; } const n = ev.ts.filter(t => typeFits(t, cond.dType)).length; return cond.once ? (n ? 1 : 0) : n; };
@@ -1205,15 +1210,17 @@ function matches(cond, ev, srcId) {
     case "creature": {
       const pwOk = pw => (cond.powMin == null || pw >= cond.powMin) && (cond.powMax == null || pw <= cond.powMax);
       const mvOk = mv => (cond.mvMin == null || mv >= cond.mvMin) && (cond.mvMax == null || mv <= cond.mvMax);
+      const kwOk = (o, desc) => !cond.kwEnt || new RegExp(`(?:^|\\n|, )${cond.kwEnt}\\b`, "i").test(String(o || "").replace(/\([^)]*\)/g, "")) || new RegExp(`\\b${cond.kwEnt}\\b`, "i").test(desc || "");
       const preOk = t => (cond.pre || []).every(w => w.startsWith("non-") ? !new RegExp(`\\b${w.slice(4)}\\b`, "i").test(t || "") : new RegExp(`\\b${w}\\b`, "i").test(t || ""));
-      if (ev.type === "enters" && /\bCreature\b/.test(ev.card.t || "") && !(cond.other && ev.id === srcId) && !(cond.nontoken && ev.tok)) return preOk(ev.card.t) && mvOk(ev.tok ? 0 : manaValue(ev.card.m)) && (cond.powMin != null || cond.powMax != null ? pwOk(Number(ev.card.p) || 0) : true) ? 1 : 0;
-      if (ev.type === "tokens" && !cond.nontoken) { const n = ev.list.filter(b => isCreatureToken(b.name) && preOk(tokenPerm(b).t) && mvOk(0) && (cond.powMin == null && cond.powMax == null || pwOk(Number((String(b.desc || "").match(/^(\d+)\//) || [])[1]) || 0))).reduce((s, b) => s + b.n, 0); return cond.once ? (n ? 1 : 0) : n; }
+      if (ev.type === "enters" && /\bCreature\b/.test(ev.card.t || "") && !(cond.other && ev.id === srcId) && !(cond.nontoken && ev.tok)) return preOk(ev.card.t) && kwOk(ev.card.o) && mvOk(ev.tok ? 0 : manaValue(ev.card.m)) && (cond.powMin != null || cond.powMax != null ? pwOk(Number(ev.card.p) || 0) : true) ? 1 : 0;
+      if (ev.type === "tokens" && !cond.nontoken) { const n = ev.list.filter(b => isCreatureToken(b.name) && preOk(tokenPerm(b).t) && mvOk(0) && kwOk("", b.desc) && (cond.powMin == null && cond.powMax == null || pwOk(Number((String(b.desc || "").match(/^(\d+)\//) || [])[1]) || 0))).reduce((s, b) => s + b.n, 0); return cond.once ? (n ? 1 : 0) : n; }
       return 0; }
     case "creature_old":
       return 0;
     case "tempt": return ev.type === "tempt" ? 1 : 0;
     case "unlock": return ev.type === "unlock" && ev.id === srcId && (!cond.door || cond.door === ev.door) ? 1 : 0;
     case "fullUnlock": return ev.type === "fullUnlock" ? 1 : 0;
+    case "cmd": { const nm = ev.type === "enters" && cond.enters ? ev.card?.n : ev.type === "attacks" && cond.attacks && ev.id ? curP?.bf?.[ev.id]?.n : null; return nm && curCmds.includes(nm) ? 1 : 0; }
     case "scry": return ev.type === "scry" && cond.kinds.includes(ev.kind) ? 1 : 0;
     case "discard": return ev.type === "discard" && turnOk(cond) ? discardCount(cond, ev) : 0;
     case "oppdiscard": return ev.type === "oppdiscard" || (cond.anyP && ev.type === "discard") ? discardCount(cond, ev) : 0;
@@ -1333,7 +1340,10 @@ function matches(cond, ev, srcId) {
       const t = ev.card.t || "", w = cond.what, COLS = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
       if (COLS[w]) return new RegExp(`\\{[^}]*${COLS[w]}[^}]*\\}`).test(ev.card?.m || "") ? 1 : 0;
       if (w === "permanent") return /\b(Instant|Sorcery)\b/.test(t) ? 0 : 1;
+      if (w === "colorless" || w === "monocolored") { const n = ["W", "U", "B", "R", "G"].filter(k => new RegExp(`\\{[^}]*${k}[^}]*\\}`).test(ev.card?.m || "")).length; return (w === "colorless" ? n === 0 && !/\bLand\b/.test(t) : n === 1) ? 1 : 0; } // Kozilek's Sentinel
       { const nw = w && w !== "noncreature" && w.match(/^non-?(artifact|enchantment|land|legendary|instant|sorcery|planeswalker|battle|[a-z]+)$/); if (nw) return COLS[nw[1]] ? (new RegExp(`\\{[^}]*${COLS[nw[1]]}[^}]*\\}`).test(ev.card?.m || "") ? 0 : 1) : new RegExp(`\\b${nw[1]}\\b`, "i").test(t) ? 0 : 1; } // Chimeric Egg: "a nonartifact spell"; "a non-Elf spell"
+      { const cl = w && w.match(/^((?:white|blue|black|red|green)(?:,? (?:or |and\/or )?(?:white|blue|black|red|green))+) (?!or |and\/or )(.+)$/); // Mindsparker: "a white or blue instant or sorcery spell"
+        if (cl) return cl[1].split(/,\s*(?:or\s+|and\/or\s+)?|\s+(?:and\/)?or\s+/).filter(Boolean).some(x => new RegExp(`\\{[^}]*${COLS[x.trim()]}[^}]*\\}`).test(ev.card?.m || "")) ? matches({ ...cond, what: cl[2] }, ev, srcId) : 0; }
       { const cw = w && w.match(/^(white|blue|black|red|green|multicolored|colorless|monocolored) (.+)$/); // Defilers: "a green permanent spell"; "a red creature spell", "a blue instant or sorcery spell"
         if (cw) { const n = ["W", "U", "B", "R", "G"].filter(k => new RegExp(`\\{[^}]*${k}[^}]*\\}`).test(ev.card?.m || "")).length;
           const colOk = cw[1] === "multicolored" ? n >= 2 : cw[1] === "colorless" ? n === 0 : cw[1] === "monocolored" ? n === 1 : new RegExp(`\\{[^}]*${COLS[cw[1]]}[^}]*\\}`).test(ev.card?.m || "");
@@ -1363,7 +1373,7 @@ export function stationCard(c, e) {
   return { ...c, n: `${c.n}#st${ch}`, o: String(c.o || "").replace(/^(\d+)\+ \| (.*)$/gm, (m, n, rest) => ch >= Number(n) ? rest : "").replace(/\n{2,}/g, "\n") };
 }
 export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, turnNo = null, cz = [], myTurn = null }) {
-  curP = p; curMyTurn = myTurn;
+  curP = p; curMyTurn = myTurn; curCmds = cz || [];
   if (turnNo != null) ctx.turnNo = turnNo;
   const lost = e => (env?.loseAll || []).some(r => permanentMatches(e, r.filter));
   const sources = () => Object.entries(p.bf || {}).map(([id, e]) => {
@@ -1782,6 +1792,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         let unk = condUnknown && t.cond.askIfUnknown;
         if (t.cond.enchP) { const enc = p.bf?.[s.id]?.encOpp; if (enc && evx.active && evx.active !== enc) continue; if (!enc || !evx.active) unk = t.cond.askIfUnknown; } // a Curse: only on the upkeep of the player it enchants
         if (t.cond.firstTurn) { const k = `${s.id}:${ti}:first`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; } // Rielle, Veronica: "for the first time each turn"
+        if (t.cond.ev === "cmd" && t.auto && /\b(?:on it|it gets|it gains|untap it)\b/i.test(t.text || "")) unk = "That's your commander (not this card)."; // My Champion Stands Supreme: "put two +1/+1 counters on it"
         if (unk && t.auto) { ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times, effs: t.effs, count: evx.n || 1, note: t.cond.askIfUnknown }); continue; }
         if (t.effs?.some(f => f.n?.spellMv)) t = { ...t, effs: t.effs.map(f => f.n?.spellMv ? { ...f, n: manaValue(evx.card?.m || "") } : f) }; // Ovika: X = that spell's mana value
         if (t.onceTurn) { const k = `${s.id}:${ti}`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; }
