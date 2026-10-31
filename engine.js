@@ -2896,8 +2896,10 @@ let CSB = null;
 export function setComboData(data) {
   if (!data?.combos || !data?.cards) return false;
   const names = data.cards.map(c => csbNorm(c[0])), by = new Map();
-  data.combos.forEach((row, i) => { const k = row[row.length - 1]; for (let j = 0; j < k; j++) { const n = names[row[j]]; let a = by.get(n); if (!a) by.set(n, a = []); a.push(i); } });
-  CSB = { data, names, by, memo: new Map(), notes: null };
+  data.combos.forEach((row, i) => { const k = row[row.length - 1]; for (let j = 0; j < k; j++) { if (row[j] < 0) continue; const n = names[row[j]]; let a = by.get(n); if (!a) by.set(n, a = []); a.push(i); } });
+  // Spellbook's "template" pieces ("a Persist creature", "a haste enabler"), filled from the card text: a slot -(t+1) takes any card in tpl[t]
+  const tpl = (data.tpl || []).map(([label, ids]) => ({ label, set: new Set(ids.map(x => names[x])) }));
+  CSB = { data, names, by, tpl, memo: new Map(), notes: null };
   return true;
 }
 export function setComboNotes(notes) { if (CSB && notes?.pre) { CSB.notes = notes.pre; CSB.memo.clear(); } }
@@ -2907,12 +2909,15 @@ export function deckCombos(names, cmds = []) {
   const have = new Set(names.map(csbNorm)), cm = new Set(cmds.map(csbNorm)), full = [], near = new Map(), seen = new Set();
   for (const n of have) for (const i of CSB.by.get(n) || []) {
     if (seen.has(i)) continue; seen.add(i);
-    const row = CSB.data.combos[i], k = row[row.length - 1]; let missing = [];
-    for (let j = 0; j < k; j++) { const nm = CSB.names[row[j]], m = row[k + j]; if (!have.has(nm) || (m & 64 && !cm.has(nm))) missing.push(CSB.data.cards[row[j]][0]); }
-    const cards = row.slice(0, k).map(x => CSB.data.cards[x]), feats = row.slice(2 * k, row.length - 1).map(f => CSB.data.feats[f]);
-    const c = { id: cards.map(x => x[1]).join("-"), pieces: cards.map(x => x[0]), feats, missing };
+    const row = CSB.data.combos[i], k = row[row.length - 1]; let missing = [], tMiss = false;
+    const chosen = row.slice(0, k).map(x => x >= 0 ? CSB.names[x] : null);
+    for (let j = 0; j < k; j++) { if (row[j] < 0) continue; const nm = CSB.names[row[j]], m = row[k + j]; if (!have.has(nm) || (m & 64 && !cm.has(nm))) missing.push(CSB.data.cards[row[j]][0]); }
+    for (let j = 0; j < k; j++) { if (row[j] >= 0) continue; const t = CSB.tpl[-row[j] - 1], m = row[k + j]; const pick = [...have].find(n => t?.set.has(n) && !chosen.includes(n) && (!(m & 64) || cm.has(n)));
+      if (pick) chosen[j] = pick; else { tMiss = true; missing.push(`any ${t?.label || "card"}`); } }
+    const cards = row.slice(0, k).map((x, j) => x >= 0 ? CSB.data.cards[x] : [names.find(n => csbNorm(n) === chosen[j]) || chosen[j] || `(${CSB.tpl[-x - 1]?.label})`, 0]), feats = row.slice(2 * k, row.length - 1).map(f => CSB.data.feats[f]);
+    const c = { id: CSB.data.vid?.[i] || cards.map(x => x[1]).join("-"), pieces: cards.map(x => x[0]), feats, missing };
     if (!missing.length) full.push(c);
-    else if (missing.length === 1 && k >= 2) { const m = missing[0]; if (!near.has(m)) near.set(m, []); near.get(m).push(c); }
+    else if (missing.length === 1 && k >= 2 && !tMiss) { const m = missing[0]; if (!near.has(m)) near.set(m, []); near.get(m).push(c); }
   }
   // keep the smallest version of each combo
   const sub = (a, b) => a.every(x => b.includes(x));
@@ -2989,13 +2994,17 @@ function csbFor(p, ctx, hand) {
   const found = [];
   for (const i of cand) {
     const row = data.combos[i], k = row[row.length - 1]; let ok = true;
-    for (let j = 0; j < k && ok; j++) { const n = names[row[j]], m = row[k + j];
-      ok = !!((m & 1 && zones.B.has(n)) || (m & 2 && zones.H.has(n)) || (m & 4 && zones.G.has(n)) || (m & 8 && zones.E.has(n)) || (m & 16 && zones.C.has(n))) && (!(m & 64) || cmds.has(n)); }
+    const inZone = (n, m) => !!((m & 1 && zones.B.has(n)) || (m & 2 && zones.H.has(n)) || (m & 4 && zones.G.has(n)) || (m & 8 && zones.E.has(n)) || (m & 16 && zones.C.has(n))) && (!(m & 64) || cmds.has(n));
+    const chosen = row.slice(0, k).map(x => x >= 0 ? names[x] : null);
+    for (let j = 0; j < k && ok; j++) if (row[j] >= 0) ok = inZone(names[row[j]], row[k + j]);
+    for (let j = 0; j < k && ok; j++) if (row[j] < 0) { const t = CSB.tpl[-row[j] - 1], m = row[k + j]; let pick = null;
+      for (const z of ["B", "H", "G", "E", "C"]) { if (pick) break; for (const n of zones[z]) if (t?.set.has(n) && !chosen.includes(n) && inZone(n, m)) { pick = n; break; } }
+      if (pick) chosen[j] = pick; else ok = false; }
     if (!ok) continue;
     const wait = [];
     const sts = data.st?.[i];
     if (sts) for (let j = 0; j < k && ok; j++) { const code = data.states[sts[j]]; if (code) { const r = csbState(code, data.cards[row[j]][0], names[row[j]], zones, bfE, p, ctx); if (!r) ok = false; else wait.push(...r); } }
-    if (ok) found.push({ i, wait, set: new Set(row.slice(0, k).map(x => names[x])), feats: row.slice(2 * k, row.length - 1).map(f => data.feats[f]) });
+    if (ok) found.push({ i, wait, chosen, set: new Set(chosen), feats: row.slice(2 * k, row.length - 1).map(f => data.feats[f]) });
   }
   // already covered by one of the app's own combo alerts (theirs do more: Loop buttons, conditions)
   const own = hand.map(c => new Set((c.pieces || String(c.name || "").split(" + ")).map(csbNorm)));
@@ -3004,8 +3013,9 @@ function csbFor(p, ctx, hand) {
   // a bigger version of a smaller combo that's also here, adding nothing new, is left out
   list = list.filter(f => !list.some(g => g !== f && g.set.size < f.set.size && sub(g.set, f.set) && f.feats.every(x => g.feats.includes(x))));
   list.sort((a, b) => a.set.size - b.set.size || b.feats.some(x => CSB_WIN.test(x)) - a.feats.some(x => CSB_WIN.test(x)));
-  const res = list.slice(0, 8).map(f => { const row = data.combos[f.i], k = row[row.length - 1], cards = row.slice(0, k).map(x => data.cards[x]);
-    const id = cards.map(c => c[1]).join("-"), note = CSB.notes?.[f.i];
+  const realName = n => { const ix = names.indexOf(n); return ix >= 0 ? data.cards[ix][0] : n; };
+  const res = list.slice(0, 8).map(f => { const row = data.combos[f.i], k = row[row.length - 1], cards = row.slice(0, k).map((x, j) => x >= 0 ? data.cards[x] : [realName(f.chosen[j]), 0]);
+    const id = data.vid?.[f.i] || cards.map(c => c[1]).join("-"), note = CSB.notes?.[f.i];
     return { key: `csb:${id}`, name: cards.map(c => c[0]).join(" + "), pieces: cards.map(c => c[0]), win: f.feats.some(x => CSB_WIN.test(x)), kind: "info", csb: id,
       desc: `${f.feats.join(" · ")}.${note ? ` Needs: ${note}` : ""}`, wait: f.wait.length ? f.wait : null, more: list.length > 8 && f === list[7] ? list.length - 8 : 0 }; });
   if (CSB.memo.size > 300) CSB.memo.clear();
