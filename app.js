@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031d";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031d";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031d";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031d";
+import { firebaseConfig } from "./config.js?v=20261031e";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031e";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031e";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031e";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -174,7 +174,7 @@ const stepOf = room => room?.step?.turnNo === (room?.turnNo || 0) ? room.step.i 
 let tableStep = "", tableTypeAdds = [], tableTurn = null;
 let mustAtkSeen = null;
 // Humility-style "base power and toughness 1/1" in play anywhere at the table (set on every room update)
-let tablePT = null, tableBuffs = [], tableLose = [], tablePlayers = {}, tableSpoil = {}, tableTurnNo = 0;
+let tableBans = [], tablePT = null, tableBuffs = [], tableLose = [], tablePlayers = {}, tableSpoil = {}, tableTurnNo = 0;
 // Celebration: two or more nonland permanents entered under that player's control this turn
 const celebrating = o => { if (!o) return false; const n = Object.values(o.bf || {}).filter(e => (e.et || 0) === tableTurnNo && !/\bLand\b/.test(e.t || "")).length + Object.values(o.tokens || {}).reduce((a, t) => a + (t.fresh?.turnNo === tableTurnNo ? t.fresh.n || 0 : 0), 0); return n >= 2; };
 const CELEB_FORM = /^celebration — as long as two or more nonland permanents entered the battlefield under your control this turn, [^\n]*?is an? [A-Z][a-z]+ with base power and toughness (\d+)\/(\d+)(, flying)?/im;
@@ -182,6 +182,7 @@ function updateTablePT(room) {
   tablePT = null; tableBuffs = []; tableLose = []; tablePlayers = {}; tableSpoil = {};
   seated(room || {}).forEach(o => { if (o.spoil && o.spoil.turnNo === (room?.turnNo || 0)) tableSpoil[o.id] = o.spoil.pt; });
   tableStep = room?.turn ? STEPS[stepOf(room)] : ""; tableTurn = room?.turn || null; tableTurnNo = room?.turnNo || 0;
+  tableBans = Object.values(room?.cbans || {}).filter(x => x.turn === tableTurnNo);
   tableCombat = `${room?.turnNo || 0}:${room?.step?.turnNo === (room?.turnNo || 0) ? room.step.extra || 0 : 0}`;
   // Yavimaya: "Each land is a Forest in addition to its other land types"
   const adds = [];
@@ -214,9 +215,14 @@ const eqList = t => String(t?.eq || "").split("+").filter(Boolean);
 function attachedTo(owner, id, isToken, e) {
   return Object.entries(owner?.bf || {}).filter(([sid, a]) => a.att && (isToken ? eqList(e).includes(sid) : a.att === id));
 }
+// Auras other players put on this permanent (Pacifism on an opponent's creature): [sid, aura, its controller]
+function attachedFrom(ownerId, id) {
+  return Object.values(tablePlayers).filter(p => p && p.id !== ownerId).flatMap(p => Object.entries(p.bf || {}).filter(([, a]) => a.attO?.p === ownerId && a.attO.id === id).map(([sid, a]) => [sid, a, p]));
+}
 // What an Aura / Equipment is on: a name for display
 function hostName(owner, sid) {
   const a = owner?.bf?.[sid];
+  if (a?.attO) { const p = tablePlayers[a.attO.p], x = p?.bf?.[a.attO.id]; return x ? `${p.name}'s ${dispName(x)}` : ""; }
   if (!a?.att) return "";
   if (a.att === "tok") { const t = Object.values(owner.tokens || {}).find(x => eqList(x).includes(sid)); return t ? `${t.name} token` : ""; }
   return owner.bf[a.att] ? dispName(owner.bf[a.att]) : "";
@@ -335,7 +341,7 @@ function buffsOn0(e, ownerId, id, isToken) {
     if (sb.other && sb.types.some(t => new RegExp(`\\b${t}`, "i").test(e.t || "") || changelingHas(e, t))) k -= 1;
     if (k > 0) { out.dp += sb.dp * k; out.dt += sb.dt * k; out.from.push({ src: `itself (${k} ${sb.types.join("/")})`, dp: sb.dp * k, dt: sb.dt * k }); }
   }
-  attachedTo(owner, id, isToken, e).forEach(([, a]) => { // Equipment / Auras on it
+  [...attachedTo(owner, id, isToken, e), ...(isToken ? [] : attachedFrom(ownerId, id))].forEach(([, a]) => { // Equipment / Auras on it (also other players' Auras)
     const ab = attOf(a);
     if (!ab) return;
     const k = ab.per ? (ab.per.ctr ? a.c?.[ab.per.ctr] || 0 : ab.per.hand ? a.handN || 0 : ab.per.sameName ? (a.imprint ? Object.values(tablePlayers).reduce((s2, o) => s2 + Object.values(o?.bf || {}).filter(x => x.n === a.imprint && /\bLand\b/.test(x.t || "")).length, 0) : 0) : ab.per.base1 ? base1Count(owner) : countTypes(owner, ab.per.types)) : 1;
@@ -400,8 +406,11 @@ function vigorOn(owner, kind, id) { return Object.entries(owner?.bf || {}).some(
 // Restriction text a creature carries: its own lines plus what its Auras / Equipment say about it ("Enchanted creature can't block" → "This creature can't block")
 const CANT_BLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) can't (?:attack or )?block(?:,| and can't be blocked|\.?$)/im;
 const UNBLOCK_RE = /^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) (?:can't block and )?can't be blocked\.?$/im;
-function restrText(o, atts) {
+const banned = (owner, kind, id, ...ks) => tableBans.some(x => x.p === owner?.id && x.kind === kind && x.id === id && ks.includes(x.k));
+function restrText(o, atts, hostT) {
   const extra = (atts || []).flatMap(a => String(a.o || modLookup?.(a.n)?.o || "").split("\n"))
+    .map(l => { const bf = l.match(/^Enchanted creature [^.]*? as long as it's an? ([A-Z][a-z]+)\. Otherwise, it can't attack or block\.$/); // Bonds of Faith
+      return bf ? (new RegExp(`\\b${bf[1]}\\b`).test(hostT || "") ? "" : "Enchanted creature can't attack or block.") : l; })
     .map(l => l.replace(/\s*\([^)]*\)/g, "").replace(/ and has "[^"]*"/g, "").replace(/\. .*$/, ".").replace(/can't attack, block, or (?:crew vehicles|transform)/i, "can't attack or block").trim())
     .filter(l => /^(?:enchanted|equipped) (?:creature|permanent) /i.test(l) && /can't (?:attack|block|be blocked)|can block only|must be blocked/i.test(l))
     .map(l => l.replace(/^(?:enchanted|equipped) (?:creature|permanent) /i, "This creature ").replace(/^This creature (?:gets [+−-]\d+\/[+−-]\d+|has [a-z ]+?)(?:,| and) (?:(?:has [a-z ]+?|gets [+−-]\d+\/[+−-]\d+),? (?:and )?)?/i, "This creature ").replace(/, and its activated abilities[^.]*/i, "").replace(/, and is goaded/i, ""));
@@ -413,19 +422,19 @@ function combatStats(owner, kind, id) {
     const e = owner.bf?.[id];
     if (!e || !/\bCreature\b/.test(e.t || "")) return null;
     const [p, t] = String(ptOf(e, countsFor(owner), owner.id, id) || "0/0").split("/").map(x => Number(x) || 0);
-    const o = restrText(String(e.o || ""), attachedTo(owner, id, false).map(([, a]) => a));
+    const o = restrText(String(e.o || ""), [...attachedTo(owner, id, false).map(([, a]) => a), ...attachedFrom(owner.id, id).map(([, a]) => a)], e.t);
     return { name: dispName(e), p, t, kws: kwsOf(e, owner.id, id).map(x => x.k), avail: e.tap ? 0 : 1, count: 1, regen: !!owner.shields?.[`bf:${id}`],
       colors: colorsOf(e.m), type: e.t || "", o, ownerName: owner.name,
-      cantBlock: !!e.suspect || CANT_BLOCK_RE.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't block"),
+      cantBlock: !!e.suspect || banned(owner, "bf", id, "noBlock", "noAtkBlk") || CANT_BLOCK_RE.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't block"),
       indestr: /^(.*,\s*)?indestructible\b/im.test(o) || !!e.c?.x_indestructible || kwsOf(e, owner.id, id).some(x => x.k === "indestructible"),
-      unblock: UNBLOCK_RE.test(o) || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked"), vig: vigorOn(owner, kind, id) };
+      unblock: UNBLOCK_RE.test(o) || banned(owner, "bf", id, "unbl") || kwsOf(e, owner.id, id).some(x => x.k === "can't be blocked"), vig: vigorOn(owner, kind, id) };
   }
   const t = owner.tokens?.[id];
   if (!t || !isCreatureToken(t.name)) return null;
   const [p, tg] = String(tokPTfx(t, owner.id, id) || "1/1").split("/").map(x => Number(x) || 0);
   const kws = kwsOf(tokenPerm(t), owner.id, id, true).map(x => x.k);
   const to = restrText("", eqList(t).map(sid => owner.bf?.[sid]).filter(Boolean));
-  return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block") || CANT_BLOCK_RE.test(to), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked") || UNBLOCK_RE.test(to), regen: !!t.sh,
+  return { name: `${t.name} token`, p, t: tg, kws, avail: t.count - (t.tapped || 0), count: t.count, cantBlock: !!t.sus || kws.includes("can't block") || CANT_BLOCK_RE.test(to) || banned(owner, "tok", id, "noBlock", "noAtkBlk"), indestr: kws.includes("indestructible"), unblock: kws.includes("can't be blocked") || UNBLOCK_RE.test(to) || banned(owner, "tok", id, "unbl"), regen: !!t.sh,
     colors: colorsOf(tokenPerm(t).m), type: tokenPerm(t).t, o: to, ownerName: owner.name, vig: vigorOn(owner, "tok", id) };
 }
 const COLOR_NAMES = { W: "white", U: "blue", B: "black", R: "red", G: "green" };
@@ -499,12 +508,25 @@ function attackWhy(owner, id, defender) {
   const s = combatStats(owner, "bf", id);
   if (!s) return "";
   const o = s.o, kws = s.kws || [], name = s.name;
+  if (banned(owner, "bf", id, "noAtk", "noAtkBlk")) return `${name} can't attack this turn`;
   if (kwHas(kws, "defender") && !/can attack (?:this turn )?as though (?:it|they) didn't have defender/i.test(o)) return `${name} has defender`;
   if (/^(?![^\n]*\b(?:as long as|unless|if|during)\b)(?:this creature|[^.\n]*?) can't attack(?: or block|, block, or crew vehicles)?(?:,|\.?$)/im.test(o)) return `${name} can't attack`;
   const un = o.match(/^(?:this creature|[^.\n]*?) can't attack unless defending player controls an? ([a-z]+)\.?$/im);
   if (un && defender && !Object.values(defender.bf || {}).some(x => new RegExp(`\\b${un[1]}\\b`, "i").test(x.t || ""))) return `${defender.name} controls no ${un[1]}`;
   if (/^(?:this creature|[^.\n]*?) can't attack unless defending player is the monarch/im.test(o) && defender && !defender.effects?.monarch) return `${defender.name} isn't the monarch`;
   if (/^[^\n]*attacks each combat if able and can't attack you\b/im.test(o)) { const aura = attachedTo(owner, id, false).map(([, a]) => a).find(a => /can't attack you/i.test(a.o || modLookup?.(a.n)?.o || "")); if (aura && owner.id === defender?.id) return "it can't attack you"; }
+  { const nCre = p => Object.values(p?.bf || {}).filter(x => /\bCreature\b/.test(x.t || "")).length + Object.values(p?.tokens || {}).filter(x => isCreatureToken(x.name)).reduce((n, x) => n + (x.count || 0), 0);
+    const un2 = o.match(/^(?:this creature|[^.\n]*?) can't attack unless (.+?)\.?$/im)?.[1] || "";
+    if (/^you control more creatures than defending player$/i.test(un2) && defender && nCre(owner) <= nCre(defender)) return `you don't control more creatures than ${defender.name}`;
+    if (/^you control another artifact$/i.test(un2) && Object.entries(owner.bf || {}).filter(([x, y]) => x !== id && /\bArtifact\b/.test(y.t || "")).length === 0) return "you control no other artifact";
+    const oth = un2.match(/^you control (two|three|four) or more other ([A-Za-z]+)$/i);
+    if (oth) { const need = { two: 2, three: 3, four: 4 }[oth[1].toLowerCase()], ty = singular(oth[2]); const have = Object.entries(owner.bf || {}).filter(([x, y]) => x !== id && new RegExp(`\\b${ty}`, "i").test(y.t || "")).length;
+      if (have < need) return `you control ${have} other ${oth[2]} (needs ${need})`; }
+    const gyN = un2.match(/^there are (seven|six|five|four|eight|ten) or more cards in your graveyard$/i);
+    if (gyN) { const need = { four: 4, five: 5, six: 6, seven: 7, eight: 8, ten: 10 }[gyN[1].toLowerCase()], have = Object.keys(owner.gy || {}).length; if (have < need) return `${have} cards in your graveyard (needs ${need})`; }
+    const ifU = o.match(/^(?:this creature|[^.\n]*?) can't attack if defending player controls an untapped (land|creature with power (\d+) or greater)\.?$/im);
+    if (ifU && defender) { const hit = Object.values(defender.bf || {}).find(x => !x.tap && (ifU[2] ? /\bCreature\b/.test(x.t || "") && (Number(String(x.p).replace(/\D/g, "")) || 0) >= Number(ifU[2]) : /\bLand\b/.test(x.t || "")));
+      if (hit) return `${defender.name} controls an untapped ${ifU[2] ? `creature with power ${ifU[2]} or greater` : "land"}`; } }
   const fly = kwHas(kws, "flying"), iw = kwHas(kws, "islandwalk");
   for (const [who, list] of [["any", Object.values(tablePlayers)], ["def", defender ? [defender] : []]]) for (const p of list) for (const x of Object.values(p?.bf || {})) {
     const t = String(x.o || modLookup?.(x.n)?.o || ""), src = `${p.id === defender?.id ? `${p.name}'s ` : ""}${dispName(x)}`;
@@ -517,6 +539,16 @@ function attackWhy(owner, id, defender) {
     }
   }
   return "";
+}
+// Things the app can't settle for an attack, shown as notes: "can't attack alone", Ensnaring Bridge, other "unless" forms
+function attackNotes(owner, id, defender) {
+  const s = combatStats(owner, "bf", id); if (!s) return [];
+  const o = s.o, out = [];
+  if (/^(?:this creature|[^.\n]*?) can't attack(?: or block)? alone\.?$/im.test(o)) out.push("it can't attack alone: another creature has to attack too");
+  const un = o.match(/^(?:this creature|[^.\n]*?) can't attack(?: or block)? unless (.+?)\.?$/im);
+  if (un && !/^(?:defending player (?:controls an? [a-z]+|is the monarch)|you control (?:more creatures than defending player|another artifact|(?:two|three|four) or more other [a-z]+)|there are \w+ or more cards in your graveyard)$/i.test(un[1])) out.push(`it can't attack unless ${un[1]}`);
+  Object.values(tablePlayers).forEach(p => Object.values(p?.bf || {}).forEach(x => { if (/creatures with power greater than the number of cards in your hand can't attack/i.test(x.o || modLookup?.(x.n)?.o || "")) out.push(`${p.id === owner.id ? "your" : `${p.name}'s`} ${dispName(x)}: it can't attack if its power (${s.p}) is greater than the cards in ${p.id === owner.id ? "your" : `${p.name}'s`} hand`); }));
+  return out;
 }
 // Every creature `defender` could block `a` with, and how it goes
 // 🛡 who is already blocking this combat (kept on the player, so Undo takes it back too)
@@ -880,10 +912,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31d";
+const APP_VERSION = "2026.10.31e";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031d" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031e" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -1861,11 +1893,12 @@ function startController(code, pid) {
     const broke = Object.entries(me.bf || {}).filter(([, e]) => e.pair && !me.bf[e.pair]);
     if (broke.length) setTimeout(() => mutate(p => broke.forEach(([id]) => { if (p.bf?.[id]) delete p.bf[id].pair; }), true), 0);
     // Auras whose permanent left go to the graveyard; Equipment just falls off
-    const orphans = Object.entries(me.bf || {}).filter(([sid, a]) => a.att && (a.att === "tok" ? !Object.values(me.tokens || {}).some(t => eqList(t).includes(sid)) : !me.bf[a.att] && !me.phased?.bf?.[a.att]));
+    const orphans = Object.entries(me.bf || {}).filter(([sid, a]) => a.att ? (a.att === "tok" ? !Object.values(me.tokens || {}).some(t => eqList(t).includes(sid)) : !me.bf[a.att] && !me.phased?.bf?.[a.att])
+      : a.attO && room.players?.[a.attO.p] && !room.players[a.attO.p].bf?.[a.attO.id] && !room.players[a.attO.p].phased?.bf?.[a.attO.id]);
     if (orphans.length) setTimeout(() => {
-      const still = orphans.filter(([sid]) => me.bf?.[sid]?.att);
+      const still = orphans.filter(([sid]) => me.bf?.[sid]?.att || me.bf?.[sid]?.attO);
       if (!still.length) return;
-      mutate(p => still.forEach(([sid, a]) => { if (a.bestowT && p.bf[sid]) { p.bf[sid].t = a.bestowT; delete p.bf[sid].bestowT; delete p.bf[sid].att; } else if (/\bAura\b/.test(a.t || "")) { delete p.bf[sid]; toZone(p, a, "gy"); } else if (p.bf[sid]) delete p.bf[sid].att; }), true);
+      mutate(p => still.forEach(([sid, a]) => { if (a.bestowT && p.bf[sid]) { p.bf[sid].t = a.bestowT; delete p.bf[sid].bestowT; delete p.bf[sid].att; } else if (/\bAura\b/.test(a.t || "")) { delete p.bf[sid]; toZone(p, a, "gy"); } else if (p.bf[sid]) { delete p.bf[sid].att; delete p.bf[sid].attO; } }), true);
       still.forEach(([, a]) => logTo(code, /\bAura\b/.test(a.t || "") ? `📎 ${me.name}'s ${dispName(a)} went to the graveyard (what it enchanted left)` : `📎 ${me.name}'s ${dispName(a)} is unattached (what it equipped left)`));
       const gone = still.filter(([, a]) => !a.bestowT && /\bAura\b/.test(a.t || ""));
       gone.forEach(([sid, a]) => { const pg = String(a.o || lookupCard(a.n)?.o || "").match(/^When (?:this (?:aura|enchantment|permanent)|[^,\n]+?) is put into (?:a|your) graveyard from the battlefield, ([^\n]+)$/m); // Audacity, Hopeful Vigil: their own trigger
@@ -2606,9 +2639,10 @@ function startController(code, pid) {
     if (!a) return `<span class="mini">It isn't a creature right now.</span>`;
     return `<div class="atk-plan"><div class="mini">${esc(a.name)} ${a.p}/${a.t}${a.kws.length ? ` · ${esc(a.kws.join(", "))}` : ""}${n > 1 ? ` · ${n} attacking` : ""}</div>${opponents().filter(o => !isOut(o)).map(o => {
       const pv = blockPreview(a, { ...o, id: o.id }), noAtk = kind === "bf" ? attackWhy(tablePlayers[pid] || { ...me, id: pid }, id, { ...o, id: o.id }) : "";
-      const warn = noAtk ? `🚫 It can't attack ${o.name}: ${noAtk}` : pv.killers.length ? `⚠ ${pv.killers.map(b => `${b.name} ${b.p}/${b.t}`).join(", ")} could block and kill it` : pv.trades.length ? `⚖ ${pv.trades.map(b => b.name).join(", ")} could trade with it` : "";
+      const notes = kind === "bf" && !noAtk ? attackNotes(tablePlayers[pid] || { ...me, id: pid }, id, { ...o, id: o.id }) : [];
+      const warn = noAtk ? `🚫 It can't attack ${o.name}: ${noAtk}` : notes.length ? `⚠ ${notes.join(" · ")}` : pv.killers.length ? `⚠ ${pv.killers.map(b => `${b.name} ${b.p}/${b.t}`).join(", ")} could block and kill it` : pv.trades.length ? `⚖ ${pv.trades.map(b => b.name).join(", ")} could trade with it` : "";
       return `<details class="plan-opp" ${warn ? "open" : ""}><summary style="border-left:4px solid ${esc(o.color)}"><b>${esc(o.name)}</b>: ${noAtk ? `🚫 can't attack (${esc(noAtk)})` : pv.able.length ? `${pv.able.length} could block${pv.menace ? " (menace: needs 2)" : ""}${pv.oneBlock ? " (only one can block it)" : ""}${pv.lure ? " (must be blocked if able)" : ""}` : "✅ nothing can block it"}${warn ? ` · <span class="plan-warn">${esc(warn)}</span>` : ""}</summary>
-        ${pv.rows.length ? pv.rows.map(b => `<div class="mini plan-row ${b.out ? "" : "muted"}">${esc(b.name)} <b>${b.p}/${b.t}</b>${b.count > 1 ? ` ×${b.avail}/${b.count}` : ""}${b.kws.length ? ` <i>${esc(b.kws.join(", "))}</i>` : ""} — ${esc(outText(b, true))}${b.out?.tramp ? ` · ${b.out.tramp} tramples over` : ""}</div>`).join("") : `<div class="mini muted">No creatures.</div>`}
+        ${notes.length ? `<div class="mini">⚠ ${esc(notes.join(" · "))}</div>` : ""}${pv.rows.length ? pv.rows.map(b => `<div class="mini plan-row ${b.out ? "" : "muted"}">${esc(b.name)} <b>${b.p}/${b.t}</b>${b.count > 1 ? ` ×${b.avail}/${b.count}` : ""}${b.kws.length ? ` <i>${esc(b.kws.join(", "))}</i>` : ""} — ${esc(outText(b, true))}${b.out?.tramp ? ` · ${b.out.tramp} tramples over` : ""}</div>`).join("") : `<div class="mini muted">No creatures.</div>`}
       </details><button class="btn small ${warn ? "" : "primary"}" ${kind === "bf" ? `data-a="plan-go" data-id="${r.id}"` : `data-a="tok-atk" data-k="${esc(id)}"`} data-o="${o.id}">⚔ Attack ${esc(o.name)}${pv.killers.length || noAtk ? " anyway" : ""}</button>`;
     }).join("")}</div>`;
   }
@@ -2661,7 +2695,7 @@ function startController(code, pid) {
         if (myr?.length) reminders.push({ id: newId(), src: `${r.src} (myriad${a.myriad > 1 ? ` ×${a.myriad}` : ""})`, text: `Copies attack each other opponent: ${myr.map(x => x.name).join(", ")}.`, times: 1, myriad: { name: a.name, n: a.myriad, others: myr.map(x => x.id) } });
         render();
   }
-  let combatFired = null, oppCombatSeen = null, akiriSeen = {};
+  let attOFix = false, combatFired = null, oppCombatSeen = null, akiriSeen = {};
   function fireCombat() { const t = room.turnNo || 0; if (combatFired === t) return; combatFired = t; phaseEvents([{ type: "phase", phase: "combat", mine: true }]); }
   function startAttack(src, attack, bearer, e, kws) {
     if (room.turn === pid) fireCombat();
@@ -4607,14 +4641,16 @@ function startController(code, pid) {
     render();
   }
   // ----- Auras & Equipment -----
-  function attachTargets(type) { // [value, label] for a picker
+  function attachTargets(type, opp) { // [value, label] for a picker; opp: an Aura can also go on another player's permanent
     const t = (type || "creature").toLowerCase();
+    const others = opp && !/you control$/.test(t) ? opponents().filter(o => !isOut(o)).flatMap(o => Object.entries(o.bf || {}).filter(([, e]) => !e.att && !e.attO && permMatch(e, parseTargetFilter(t))).map(([id, e]) => [`opp:${o.id}:${id}`, `${o.name}'s ${dispName(e)}`])) : [];
     const cards = Object.entries(me.bf || {}).filter(([, e]) => permMatch(e, parseTargetFilter(t.replace(/ you control$/, "")))).map(([id, e]) => [`bf:${id}`, dispName(e)]);
     const toks = /creature|permanent/.test(t) && !/legendary/.test(t) ? Object.entries(me.tokens || {}).filter(([, x]) => x.count > 0 && isCreatureToken(x.name)).map(([k, x]) => [`tok:${k}`, `${x.name} token${x.count > 1 ? ` (one of ${x.count})` : ""}${eqList(x).length ? " (equipped)" : ""}`]) : [];
-    return [...cards, ...toks];
+    return [...cards, ...toks, ...others];
   }
   function detachIn(p, sid) {
     const a = p.bf?.[sid];
+    if (a?.attO) delete a.attO;
     if (!a?.att) return;
     if (a.att === "tok") Object.values(p.tokens || {}).forEach(t => { if (eqList(t).includes(sid)) { const l = eqList(t).filter(x => x !== sid); if (l.length) t.eq = l.join("+"); else delete t.eq; } });
     delete a.att;
@@ -4626,6 +4662,10 @@ function startController(code, pid) {
     const rc = /^Reconfigure\b/m.test(String(a.o || lookupCard(a.n)?.o || ""));
     if (!rc && target && /\bCreature\b/.test(a.t || "") && /\b(Equipment|Fortification)\b/.test(a.t || "")) { toast(`${dispName(a)} is a creature right now, so it can't be attached.`); return; }
     let name = "";
+    if (target?.startsWith("opp:")) { const [, oid, tid] = target.split(":"), o = room.players?.[oid], x = o?.bf?.[tid];
+      if (!x) return;
+      act([], p => { detachIn(p, sid); if (p.bf?.[sid]) p.bf[sid].attO = { p: oid, id: tid }; });
+      logTo(code, `📎 ${me.name} attached ${dispName(a)} to ${o.name}'s ${dispName(x)}`); render(); return; }
     if (target?.startsWith("bf:")) name = me.bf[target.slice(3)] ? dispName(me.bf[target.slice(3)]) : "";
     else if (target?.startsWith("tok:")) name = me.tokens?.[target.slice(4)] ? `${me.tokens[target.slice(4)].name} token` : "";
     act([], p => {
@@ -4652,7 +4692,7 @@ function startController(code, pid) {
     render();
   }
   function attachPickBox(r, sid, type) {
-    const opts = attachTargets(type);
+    const opts = attachTargets(type, /\bAura\b/.test(me.bf?.[sid]?.t || ""));
     return opts.length ? `<select class="fetch-pick" id="ap-${r.id}">${opts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select>
       <button class="btn small primary" data-a="attach-go" data-id="${r.id}" data-s="${esc(sid)}">📎 Attach</button>` : `<span class="mini">Nothing to attach it to.</span>`;
   }
@@ -6644,7 +6684,7 @@ function startController(code, pid) {
     $("remBox").innerHTML = `${reminders.filter(r => r.resolveOrder).length > 1 ? `<div class="order-banner">🔀 These triggered at the same time. Tap <b>▶ Resolve</b> in the order you want them to happen.</div>` : ""}${room.control ? `<div class="ctl-bar">${esc(controlText(room.control))}${room.control.target === pid && room.control.active ? " · do what they say this turn" : ""}</div>` : ""}${rulesStrip()}${room.winner ? `<div class="win-box">🏆 <b>${esc(room.winner.name)}</b> wins the game! (${esc(room.winner.src)})</div>` : ""}${comboBox()}${responseBox()}${notesBox()}${reminders.length ? `<div class="reminders">${reminders.slice(-4).map(r => `
         <div class="reminder">${(targetSrcColors = remSrcColors(r), "")}
           <div><b class="rsrc">⚙ ${esc(r.src)}</b>${r.times > 1 ? ` ×${r.times}` : ""}: ${r.oppPick ? esc(opLabel(r.oppPick)) : ""}${r.effs?.some(f => f.k === "setlife") ? esc(r.effs.find(f => f.k === "setlife").label.replace(/^\w/, c => c.toUpperCase())) : r.effs?.some(f => f.k === "remove") ? removeLabel(r.effs.find(f => f.k === "remove"), r) : r.effs?.some(f => f.k === "adnaus") ? adnLabel(r) : r.effs?.some(f => f.k === "airbend") ? airLabel(r.effs.find(f => f.k === "airbend")) : r.modes ? `Choose ${r.pick === "multi" ? "one or more" : r.pick}${r.times > 1 ? " (each time)" : ""}:` : r.fetch ? `Search for ${r.fetch.desc === "card" ? (r.fetch.n > 1 ? `up to ${r.fetch.n} cards` : "any card") : `${r.fetch.n > 1 ? `up to ${r.fetch.n} ` : r.fetch.n === "X" ? "X " : "a "}${esc(r.fetch.desc)} card${r.fetch.n !== 1 ? "s" : ""}`}${r.fetch.dest === "hand" ? " → hand" : r.fetch.dest === "top" ? " → top of library" : r.fetch.dest === "graveyard" ? " → graveyard" : ""}` : r.mana ? `Add ${manaHtml(r.mana.n <= 10 ? r.mana.syms.repeat(r.mana.n) : r.mana.syms)}${r.mana.n > 10 ? ` × ${r.mana.n}` : ""}` : esc(r.text)}${r.note ? `<div class="mini">${esc(r.note)}</div>` : ""}${baseSetBtn(r)}${consultBox(r)}${digExtras(r.impulse || r.instead ? "" : digTextOf(r), `data-id="${r.id}"`, "r" + r.id, !!(r.drawN || drawCount(r.text)) && !r.effs?.length)}</div>
-          ${copyHostBar(r)}${wheelBar(r)}${selfDrawBar(r)}${coinBar(r)}${diceBar(r)}${radBar(r)}${discoverBar(r)}${sephNote(r)}${exploreBar(r)}${enteredNote(r)}<div class="row">
+          ${copyHostBar(r)}${wheelBar(r)}${selfDrawBar(r)}${coinBar(r)}${diceBar(r)}${radBar(r)}${discoverBar(r)}${sephNote(r)}${exploreBar(r)}${enteredNote(r)}${banBar(r)}<div class="row">
             ${r.pact ? `<button class="btn small primary" data-a="pact-paid" data-id="${r.id}">Paid ${esc(r.pact.cost)}</button>
                 <button class="btn small" data-a="pact-lose" data-id="${r.id}">Can't pay → I lose</button>`
               : r.loseFx === "you" ? `<button class="btn small" data-a="lose-me" data-id="${r.id}">💀 I lose</button>`
@@ -7209,6 +7249,25 @@ function startController(code, pid) {
     return rows.length ? `<div class="mini">Explore: reveal the top card. A land goes to your hand; otherwise a +1/+1 counter, and you may put the card into your graveyard.${per > 1 ? ` Topography Tracker: explores ${per}× each.` : ""}</div>${rows.join("")}` : "";
   }
   // "if another Human entered the battlefield under your control this turn" (Éowyn)
+  // "Target creature can't block this turn" and friends: mark the creature so the block / attack previews know (room.cbans, this turn only)
+  function banKind(text) {
+    const t = String(text || "");
+    if (/\btarget creatures?[^.]*? can't attack or block this turn/i.test(t)) return { k: "noAtkBlk", label: "can't attack or block this turn", who: "any" };
+    if (/\btarget creatures?[^.]*? can't block this turn/i.test(t)) return { k: "noBlock", label: "can't block this turn", who: /you control/i.test(t.match(/target creatures?[^.]*? can't block/i)[0]) ? "mine" : "any" };
+    if (/\btarget creature[^.]*? can't attack this turn/i.test(t)) return { k: "noAtk", label: "can't attack this turn", who: "any" };
+    if (/\b(?:another )?target (?:attacking )?creature[^.]*? can't be blocked this turn|\b(?:this creature|it) [^.]*?can't be blocked this turn/i.test(t)) return { k: "unbl", label: "can't be blocked this turn", who: "mine" };
+    return null;
+  }
+  function banBar(r) {
+    const b = banKind(r.text); if (!b) return "";
+    const pl = b.who === "mine" ? [{ ...me, id: pid }] : seated(room).filter(o => !isOut(o)).sort((x, y) => (x.id === pid) - (y.id === pid));
+    const opts = pl.flatMap(o => [...Object.entries(o.bf || {}).filter(([, e]) => /\bCreature\b/.test(e.t || "")).map(([id, e]) => [`${o.id}|bf|${id}`, `${o.id === pid ? "My" : `${o.name}'s`} ${dispName(e)}`]),
+      ...Object.entries(o.tokens || {}).filter(([, x]) => x.count > 0 && isCreatureToken(x.name)).map(([k, x]) => [`${o.id}|tok|${k}`, `${o.id === pid ? "My" : `${o.name}'s`} ${x.name} token${x.count > 1 ? "s" : ""}`])]);
+    if (!opts.length) return "";
+    const sel = r.srcId && b.who === "mine" && /\b(?:this creature|it) [^.]*?can't be blocked this turn/i.test(r.text) ? `${pid}|bf|${r.srcId}` : "";
+    const done = Object.values(room.cbans || {}).filter(x => x.turn === (room.turnNo || 0) && x.rid === r.id);
+    return `<div class="row"><select class="fetch-pick" id="cb-${r.id}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(n)}</option>`).join("")}</select><button class="btn small" data-a="ban-go" data-id="${r.id}" data-k="${b.k}">🚫 Mark: ${esc(b.label)}</button>${done.length ? `<span class="mini">✔ ${done.length} marked</span>` : ""}</div>`;
+  }
   function enteredNote(r) {
     const m = String(r.text || "").match(/if (another )?(?:an? )?([A-Z]?[a-z]+) entered the battlefield under your control this turn/i); if (!m) return "";
     const t = room?.turnNo || 0, ty = m[2].toLowerCase() === "creature" ? "Creature" : m[2][0].toUpperCase() + m[2].slice(1);
@@ -7602,7 +7661,7 @@ function startController(code, pid) {
         <button class="link who" data-a="view" data-ref="bf:${id}">${e.cmd ? "⭐ " : ""}${esc(dispName(e))}</button>
         ${me.ring?.bearer?.id === id ? `<span class="ring-tag" title="${esc(ringTitle(me))}">💍 Ring-bearer${ringLevel(me) ? " · legendary" : ""}</span>` : ""}
         ${/\bdelirium\b/i.test(e.o || lookupCard(e.n)?.o || "") ? `<span class="cond ${gyTypes() >= 4 ? "on" : "off"}" title="Card types in your graveyard">🪦 Delirium ${gyTypes()}/4</span>` : ""}${e.pair && me.bf?.[e.pair] ? `<span class="att-tag">🔗 ${esc(dispName(me.bf[e.pair]))}</span>` : ""}${e.suspect ? `<span class="att-tag">🕵 suspected · can't block</span>` : ""}${blockingNow(me)[`bf:${id}`] ? `<span class="att-tag">🛡 blocking this combat</span>` : ""}${/is dealt damage, [^,.]+ deals that much damage to target opponent/i.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="pair-hurt" data-id="${id}" title="It or its partner was dealt damage">💥 Hurt</button>` : ""}${e.color ? `<span class="att-tag">🎨 ${esc(e.color)}</span>` : ""}${e.ctype ? `<span class="att-tag">🏷 ${esc(e.ctype)}</span>` : ""}${/\bLand\b/.test(e.t || "") ? tableTypeAdds.filter(a => !new RegExp(`\\b${a.add}\\b`).test(e.t)).map(a => `<span class="att-tag" title="${esc(a.src)}">+${esc(a.add)}</span>`).join("") : ""}${(() => { const sg = /\bSaga\b/.test(e.t || "") && sagaChapters({ ...e, o: e.o || lookupCard(e.n)?.o }); return sg ? `<span class="att-tag">📜 ${e.c?.lore || 0}/${sg.last}</span>` : ""; })()}
-        ${/\bClass\b/.test(e.t || "") ? `<span class="att-tag">📈 Level ${e.lvl || 1}</span>` : ""}        ${e.att ? `<span class="att-tag">📎 on ${esc(hostName(me, id) || "?")}</span>` : ""}${attachedTo(me, id, false).map(([, a]) => `<span class="att-tag">📎 ${esc(dispName(a))}</span>`).join("")}${me.shields?.[`bf:${id}`] ? `<span class="att-tag">♻ regen</span>` : ""}
+        ${/\bClass\b/.test(e.t || "") ? `<span class="att-tag">📈 Level ${e.lvl || 1}</span>` : ""}        ${e.att || e.attO ? `<span class="att-tag">📎 on ${esc(hostName(me, id) || "?")}</span>` : ""}${attachedFrom(pid, id).map(([, a, o]) => `<span class="att-tag">📎 ${esc(o.name)}'s ${esc(dispName(a))}</span>`).join("")}${attachedTo(me, id, false).map(([, a]) => `<span class="att-tag">📎 ${esc(dispName(a))}</span>`).join("")}${me.shields?.[`bf:${id}`] ? `<span class="att-tag">♻ regen</span>` : ""}
         ${e.own ? `<span class="own-tag" style="--oc:${esc(e.own.color || "#888")}">${esc(e.own.name)}'s${e.stolen?.until === "eot" ? " · until end of turn" : ""}</span>` : ""}
         ${manaHtml(mana)}
         ${(() => { const c = lookupCard(e.n) || e; const mp = c?.o ? activatedAbilities(c).find(a => a.manaPer && !a.manaPer.devotion)?.manaPer : null;
@@ -7647,10 +7706,10 @@ function startController(code, pid) {
           return locked.length ? `<div class="abilities">${locked.map(([f, i]) => `<button class="btn small ability" data-a="room-unlock" data-id="${id}" data-i="${i}">🔓 Unlock ${esc(f.n)} ${manaHtml(f.m || "")}</button>`).join("")}</div>` : `<div class="mini">Both doors unlocked</div>`; })()}
         ${(() => { const c = lookupCard(e.n), wr = c && winRule(c); return wr ? `<button class="btn small ability" data-a="win-manual" data-id="${id}">🏆 Win condition met: declare win</button>` : ""; })()}
         ${(() => { const c = { ...e, o: e.o || lookupCard(e.n)?.o, t: e.t || lookupCard(e.n)?.t }; const ec = equipCost(c), en = enchantType(c); if (!ec && !en) return "";
-          const opts = attachTargets(ec ? "creature" : en).filter(([v]) => v !== `bf:${id}`);
-          return `<div class="label">${ec ? `Equip ${manaHtml(ec)}` : `Enchant ${esc(en)}`}${e.att ? ` · on ${esc(hostName(me, id) || "?")}` : ""}</div><div class="abilities">
-            ${opts.length ? `<select class="fetch-pick" id="eq-${id}">${opts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn small ability" data-a="equip-go" data-id="${id}">📎 ${e.att ? "Move" : "Attach"}</button>` : `<span class="mini">Nothing to attach it to.</span>`}
-            ${e.att ? `<button class="btn small" data-a="unattach" data-id="${id}">Unattach</button>` : ""}</div>`; })()}
+          const opts = attachTargets(ec ? "creature" : en, !ec && /\bAura\b/.test(e.t || "")).filter(([v]) => v !== `bf:${id}`);
+          return `<div class="label">${ec ? `Equip ${manaHtml(ec)}` : `Enchant ${esc(en)}`}${e.att || e.attO ? ` · on ${esc(hostName(me, id) || "?")}` : ""}</div><div class="abilities">
+            ${opts.length ? `<select class="fetch-pick" id="eq-${id}">${opts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</select><button class="btn small ability" data-a="equip-go" data-id="${id}">📎 ${e.att || e.attO ? "Move" : "Attach"}</button>` : `<span class="mini">Nothing to attach it to.</span>`}
+            ${e.att || e.attO ? `<button class="btn small" data-a="unattach" data-id="${id}">Unattach</button>` : ""}</div>`; })()}
         <div class="leave-row">
           <span class="muted">Leaves to:</span>
           ${/\bCreature\b/.test(e.t || "") && e.tap ? `<button class="btn small" data-a="attack" data-id="${id}">⚔ Attack</button>` : ""}${(() => { const o = String(e.o || lookupCard(e.n)?.o || ""); const bu = o.match(/^Bushido (\d+)/m) || o.match(/^Afflict (\d+)/m), bt = /^whenever this creature (?:blocks or )?becomes blocked, /im.test(o); return bu || bt ? `<button class="btn small" data-a="blocked" data-id="${id}" title="It blocked or became blocked">🛡 Blocked${bu ? (/^Afflict/.test(bu[0]) ? ` (afflict ${bu[1]})` : ` (+${bu[1]}/+${bu[1]})`) : ""}</button>` : ""; })()}${e.fd ? `<button class="btn small primary" data-a="faceup" data-id="${id}">🂡 Turn face up${e.fd.card ? `: ${esc(e.fd.card.n)}` : ""}${e.fd.cost ? ` (${esc(e.fd.cost)})` : ""}</button>` : ""}${(() => { const c0 = deckCard(e.n) || lookupCard(e.n); return c0?.faces?.length > 1 && /^(transform|flip)$/.test(c0.layout || "") ? `<button class="btn small" data-a="flip-man" data-id="${id}" title="Turn it to its other face">🔄 ${esc(c0.faces[1 - (e.face || 0)].n)}</button>` : ""; })()}${/equipped creature gets \+1\/\+1 for each card in your hand|power and toughness are each equal to the number of cards in your hand/i.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="hand-set" data-id="${id}" title="Cards in your hand (the app can't see your hand)">✋ Hand: ${e.handN ?? 0}</button>` : ""}${/each of those creatures has "\{1\}\{U\}: Exile this creature, then return it to the battlefield/i.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="dd-blink" data-id="${id}">✨ Blink it or its pair ({1}{U})</button>` : ""}${(() => { const sv = String(e.o || lookupCard(e.n)?.o || "").match(/^((?:\{[^}]+\})+), \{T\}: Add X mana in any combination of colors, where X is the greatest power among creatures you control/m); return sv && !e.tap ? `<button class="btn small" data-a="selv-btn" data-id="${id}" data-c="${sv[1]}">⚡ ${sv[1]}, Tap: add X (X = ${maxPowerNow()})</button>` : ""; })()}${(() => { const xm = String(e.o || lookupCard(e.n)?.o || "").match(/^\{T\}: Add X mana of any one color, where X is (?:the number of ([A-Za-z]+?)s you control|[^.\n]*?'s power)/m); if (!xm || e.tap) return ""; const x = xm[1] ? countTypes(me, [xm[1].toLowerCase()]) : Number(ptOf(e, countsFor(me), pid, id).split("/")[0]) || 0; return `<button class="btn small" data-a="xany" data-id="${id}" data-x="${x}">⚡ Tap: add ${x} of one color</button>`; })()}${String(e.o || lookupCard(e.n)?.o || "").match(/^Exile a creature you control: Add X mana of any one color, where X is 1 plus the exiled creature's mana value/m) ? `<button class="btn small" data-a="foodchain" data-id="${id}">⚡ Exile a creature for mana</button>` : ""}${/^Station \(/m.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="station" data-id="${id}">🚀 Station (${e.c?.charge || 0} charge)</button>` : ""}${/you may cast noncreature spells from the top of your library/i.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="citadel" data-k="nc" data-id="${id}">📚 Cast a noncreature spell from top of library</button>` : ""}${/creatures? you control: add one mana of any color/i.test(e.o || lookupCard(e.n)?.o || "") && /^tap an untapped ([a-z ]+?) you control: add one mana of any color/im.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="relic" data-id="${id}">⚡ Tap a ${esc(((e.o || lookupCard(e.n)?.o || "").match(/^tap an untapped ([a-z ]+?) you control:/im) || [])[1] || "creature")} for mana</button>` : ""}${(() => { const vm = String(e.o || lookupCard(e.n)?.o || "").match(/^\{0\}: Add X mana in any combination of (\{\w\}) and\/or (\{\w\}), where X is [^\n]*?power/im); return vm ? `<button class="btn small" data-a="vivi" data-id="${id}" data-s1="${vm[1]}" data-s2="${vm[2]}">⚡ Add X mana (${vm[1]}/${vm[2]})</button>` : ""; })()}${/you may play lands and cast spells from the top of your library\. if you cast a spell this way, pay life equal to its mana value/i.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="citadel" data-id="${id}">📚 Play from top of library</button>` : ""}${/becomes prepared|enters prepared/i.test(e.o || lookupCard(e.n)?.o || "") && preparedSpell(e) ? (e.prepared ? `<button class="btn small primary" data-a="prep-cast" data-id="${id}">🔮 Cast ${esc(preparedSpell(e)?.n || "its spell")} (copy)</button>` : `<button class="btn small" data-a="prep-mark" data-id="${id}" title="It became prepared">🔮 Mark prepared</button>`) : ""}${REPERC.test(e.o || lookupCard(e.n)?.o || "") ? `<button class="btn small" data-a="rep-manual" data-id="${id}" title="Combat damage, fights…">💥 A creature was dealt damage</button>` : ""}${bigHitTriggers({ ...e, o: e.o || lookupCard(e.n)?.o }).map((h, i) => `<button class="btn small" data-a="bighit" data-id="${id}" data-i="${i}" title="Blockers, fights, other damage the app didn't see">💥 Dealt ${h.min}+ damage</button>`).join("")}${crewOf({ ...e, o: e.o || lookupCard(e.n)?.o }) && !e.crewT ? `<button class="btn small" data-a="crew" data-id="${id}">🚗 Crew ${crewOf({ ...e, o: e.o || lookupCard(e.n)?.o })}</button>` : ""}
@@ -9901,6 +9960,13 @@ function startController(code, pid) {
         break;
       }
       case "land-grant": { const r = reminders.find(x => x.id === b.dataset.id); if (r) useLandGrant(r, b.dataset.s, b.dataset.t); break; }
+      case "ban-go": {
+        const v = document.getElementById(`cb-${b.dataset.id}`)?.value; if (!v) break;
+        const [op, kind, id] = v.split("|"), o = room.players?.[op], nm = kind === "bf" ? (o?.bf?.[id] ? dispName(o.bf[id]) : "") : `${o?.tokens?.[id]?.name || ""} token`;
+        update(ref(db, `rooms/${code}/cbans/${newId()}`), { turn: room.turnNo || 0, p: op, kind, id, k: b.dataset.k, rid: b.dataset.id, by: pid });
+        logTo(code, `🚫 ${me.name}: ${o?.id === pid ? "their" : `${o?.name}'s`} ${nm} ${b.dataset.k === "noBlock" ? "can't block" : b.dataset.k === "noAtk" ? "can't attack" : b.dataset.k === "unbl" ? "can't be blocked" : "can't attack or block"} this turn`);
+        toast(`🚫 Marked ${nm}`); break;
+      }
       case "attach-go": {
         const r = reminders.find(x => x.id === b.dataset.id);
         const v = document.getElementById(`ap-${b.dataset.id}`)?.value;
@@ -10607,6 +10673,10 @@ function startController(code, pid) {
       const must = Object.entries(me.bf || {}).filter(([id, e]) => !e.tap && /\bCreature\b/.test(e.t || "") && /attacks each combat if able/i.test(e.o || lookupCard(e.n)?.o || "") && !isSick({ ...e, o: e.o || lookupCard(e.n)?.o }, meOwner(), id));
       if (must.length) { reminders.push({ id: newId(), src: "Combat", text: `${must.map(([, e]) => dispName(e)).join(", ")} must attack this combat if able.`, times: 1 }); setTimeout(render, 0); }
     }
+    // "this turn" combat marks from earlier turns: the active player tidies them away
+    if (room.turn === pid && room.cbans) { const old = Object.entries(room.cbans).filter(([, x]) => x.turn !== (room.turnNo || 0)); if (old.length) update(ref(db, `rooms/${code}/cbans`), Object.fromEntries(old.map(([k]) => [k, null]))); }
+    // my Auras on other players' permanents: when what they enchant leaves, they go to the graveyard (act() sorts it out)
+    if (Object.values(me.bf || {}).some(a => a.attO && room.players?.[a.attO.p] && !room.players[a.attO.p].bf?.[a.attO.id] && !room.players[a.attO.p].phased?.bf?.[a.attO.id]) && !attOFix) { attOFix = true; setTimeout(() => { attOFix = false; act([]); }, 0); }
     // Crewed Vehicles stop being creatures when the turn ends
     const crewed = Object.entries(me.bf || {}).filter(([, e]) => e.crewT && e.crew !== (room.turnNo || 0));
     if (crewed.length) mutate(p => crewed.forEach(([id]) => { const x = p.bf?.[id]; if (x?.crewT) { x.t = x.crewT; delete x.crewT; delete x.crew; } }));
