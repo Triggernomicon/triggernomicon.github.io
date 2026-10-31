@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031g";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031g";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031g";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031g";
+import { firebaseConfig } from "./config.js?v=20261031h";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031h";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031h";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031h";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -922,10 +922,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31g";
+const APP_VERSION = "2026.10.31h";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031g" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031h" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -3090,6 +3090,8 @@ function startController(code, pid) {
       const wr = card.o && winRule(card);
       if (wr && wr.when === "cast") setTimeout(() => checkWin(card, null, wr), 0);
       let sp = card.o ? spellAbility(card) : { effs: [] };
+      if (sp.mastery && !opts.copy) { const n = Object.values(me.gy || {}).filter(g => g.n !== card.n && /\b(Instant|Sorcery)\b/.test(g.t || lookupCard(g.n)?.t || "")).length; // Spell mastery (this spell isn't in the graveyard yet)
+        reminders.push(normalizeRem({ id: newId(), src: `${dispName(card)} (spell mastery)`, text: `${n >= 2 ? "✅" : "❓"} Spell mastery (${n} instant/sorcery card${n === 1 ? "" : "s"} in your graveyard, needs 2): ${sp.mastery[0].toUpperCase()}${sp.mastery.slice(1)}`, times: 1 })); }
       if (/players can't lose life this turn/i.test(card.o || "")) { update(ref(db, `rooms/${code}`), { noLoss: { turnNo: room.turnNo || 0, src: dispName(card), by: me.name, game: /can't lose the game or win the game this turn/i.test(card.o), hexproof: /players gain hexproof/i.test(card.o) } }); logTo(code, `🛡 ${me.name}'s ${dispName(card)}: players can't lose life${/can't lose the game/i.test(card.o) ? " or lose/win the game" : ""} this turn${/players gain hexproof/i.test(card.o) ? " · players have hexproof" : ""}`); }
       if (/each player discards their hand, then draws cards equal to the greatest number of cards a player discarded this way/i.test(card.o || "") && !opts.copy) {
         const v = prompt(`${dispName(card)}: the biggest hand at the table had how many cards? (everyone discards, then draws that many)`, "7");

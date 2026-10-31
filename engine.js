@@ -214,7 +214,8 @@ export function parseSearch(text) {
 // Does a deck card fit a search? x = chosen/known value for "X" mana value rules
 export function matchesSearch(c, f, x) {
   const t = c.t || "";
-  const okWord = w => {
+  const okWord = w0 => {
+    const w = String(w0).replace(/[^a-z' -]/gi, ""); if (!w) return true; // stray brackets etc. never break the search
     if (w === "basic") return /\bBasic\b/.test(t);
     if (COLOR_LETTER[w]) return new RegExp(`\\{[^}]*${COLOR_LETTER[w]}[^}]*\\}`).test(c.m || "");
     if (w === "colorless") return !/[WUBRG]/.test(c.m || "") && !/\bLand\b/.test(t);
@@ -278,7 +279,7 @@ function parseEffects0(text, cardName = "") {
   const selfRe = new RegExp(`put (a|an|one|two|three|four|five|\\d+) ([+−-]?\\d+/[+−-]?\\d+|[a-z]+) counters? on (?:it|this|${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`, "i");
   const hm = text.match(/\badd ((?:\{[^}]+\})+) for each card in (target opponent's|target player's|an opponent's) hand/i);
   if (hm) effs.push({ k: "handmana", syms: hm[1] });
-  const mm = !hm && text.match(new RegExp(`\\badd ((?:\\{[^}]+\\})+)(?: for each ([+−-]?\\d+/[+−-]?\\d+|[a-z]+) counters? on (?:this|${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})[^.]*)?`, "i"));
+  const mm = !hm && !/\bwhenever [^.]*?(?:dies|is put into)[^.]*? this turn, add \{/i.test(text) && text.match(new RegExp(`\\badd ((?:\\{[^}]+\\})+)(?: for each ([+−-]?\\d+/[+−-]?\\d+|[a-z]+) counters? on (?:this|${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})[^.]*)?`, "i"));
   // Recursion: "return target creature card from your graveyard to your hand", "return all land cards from your graveyard to the battlefield tapped"
   const rgMv = text.match(/\breturn target ([a-z ]+?) card with mana value (\d+|x) or less from your graveyard to (your hand|the battlefield)/i);
   if (rgMv) effs.push({ k: "regrow", n: 1, what: rgMv[1], filter: { ...parseTargetFilter(rgMv[1]), mv: /^x$/i.test(rgMv[2]) ? { op: "<=", val: "X" } : { op: "<=", val: Number(rgMv[2]) } }, dest: /hand/i.test(rgMv[3]) ? "hand" : "battlefield" });
@@ -1030,6 +1031,14 @@ export function spellAbility(card) {
       const modes = lines.map(l => l.trim().match(/^\+\s*((?:\{[^}]+\})+)\s+—\s+(.+)$/)).filter(Boolean).map(m => ({ name: `+${m[1]}`, text: m[2], effs: parseEffects(m[2], card.n), extra: true }));
       if (modes.length) { spellCache.set(card.n, { effs: [], auto: false, modes, pick: "multi", note: "Spree: pay the + cost of each mode you choose." }); return spellCache.get(card.n); }
     }
+    const cl = lines.map(l => l.trim()).find(l => /^Cleave \{/i.test(l));
+    if (cl) { // Dig Up: "Search your library for a [basic land] card…" — cleaved, the words in brackets go away
+      const body = lines.map(l => l.trim()).filter(l => l && !/^Cleave \{/i.test(l)).join(" ");
+      const cost = (cl.match(/^Cleave ((?:\{[^}]+\})+)/i) || [])[1] || "";
+      const plain = body.replace(/[\[\]]/g, ""), cleaved = body.replace(/\s*\[[^\]]*\]/g, "").replace(/\s+([,.])/g, "$1");
+      spellCache.set(card.n, { effs: [], auto: false, modes: [{ name: "Normal", text: plain, effs: parseEffects(plain, card.n) }, { name: `Cleaved (${cost})`, text: cleaved, effs: parseEffects(cleaved, card.n) }], pick: "one" });
+      return spellCache.get(card.n);
+    }
     const ti = lines.findIndex(l => /^Tiered\b/i.test(l.trim()));
     if (ti >= 0) { // "• Thundara — {3} — Thunder Magic deals 4 damage to target creature."
       const modes = lines.slice(ti + 1).map(l => l.trim().match(/^[•\-]\s*([^—]+?)\s+—\s+([^—]+?)\s+—\s+(.+)$/)).filter(Boolean)
@@ -1037,10 +1046,11 @@ export function spellAbility(card) {
       spellCache.set(card.n, { effs: [], auto: false, modes, pick: "one" });
       return spellCache.get(card.n);
     }
-    const text = lines.map(l => l.replace(/\([^)]*\)/g, "").trim()).filter(Boolean).filter(l => !/^as an additional cost to cast this spell, sacrifice\b/i.test(l) && !/^when you cycle\b/i.test(l) && !/^(?:basic land|[a-z]+)?cycling\b/i.test(l)).join(" ").replace(/"[^"]+"/g, "(ability)");
+    const text = lines.map(l => l.replace(/\([^)]*\)/g, "").trim()).filter(Boolean).filter(l => !/^as an additional cost to cast this spell, sacrifice\b/i.test(l) && !/^when you cycle\b/i.test(l) && !/^(?:basic land|[a-z]+)?cycling\b/i.test(l) && !/^spell mastery — /i.test(l)).join(" ").replace(/"[^"]+"/g, "(ability)");
+    const sm = lines.map(l => l.trim()).find(l => /^spell mastery — if there are two or more instant and\/or sorcery cards in your graveyard, /i.test(l)); // checked by the app when cast
     const effs = parseEffects(text, card.n);
     const auto = effs.length > 0 && !/\byou may\b/i.test(text) && !NEEDS_PLAYER.test(text.replace(/(token[^"]*?)with "[^"]*"/gi, "$1").replace(/,? where x is the number of (?:other )?[a-z, ]+? you control/i, "").replace(/ for each (other )?[a-z ,/]+? you control/i, m => effs.some(f => f.per) ? "" : m).replace(/ for each [a-z+/1-]+ counters? on [^.,]*/gi, m => effs.some(f => f.perCtr || f.k === "drawPer") ? "" : m).replace(/search your library[^.]*\./i, ""));
-    spellCache.set(card.n, { effs, auto });
+    spellCache.set(card.n, { effs, auto, ...(sm ? { mastery: sm.replace(/^spell mastery — if there are two or more instant and\/or sorcery cards in your graveyard, /i, "") } : {}) });
   }
   return spellCache.get(card.n);
 }
