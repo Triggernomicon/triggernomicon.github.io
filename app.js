@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261031f";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031f";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031f";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031f";
+import { firebaseConfig } from "./config.js?v=20261031g";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261031g";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261031g";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261031g";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -275,6 +275,11 @@ function condMet(c, ow, src, sid) {
     case "untapped": return !src?.tap;
     case "tapped": return !!src?.tap;
     case "monstrous": return !!src?.monstrous;
+    case "gyKind": { const w = c.w, n = Object.values(ow.gy || {}).filter(g => { const t = g.t || modLookup?.(g.n)?.t || "";
+        return w === "permanent" ? !/\b(Instant|Sorcery)\b/.test(t) && !!t : w === "historic" ? /\b(Artifact|Legendary|Saga)\b/.test(t) : w === "instant and/or sorcery" ? /\b(Instant|Sorcery)\b/.test(t) : new RegExp(`\\b${w}\\b`, "i").test(t); }).length;
+      return n >= c.n; }
+    case "attacking": return tableStep === "Combat" && ow.attacked?.turnNo === tableTurnNo && !!ow.attacked?.bf?.[sid];
+    case "hostIs": { const host = src?.att && src.att !== "tok" ? ow.bf?.[src.att] : src; return CB_COL[c.w] ? new RegExp(`\\{[^}]*${CB_COL[c.w]}`).test(host?.m || "") : new RegExp(`\\b${c.w}\\b`, "i").test(host?.t || ""); }
   }
   return false;
 }
@@ -917,10 +922,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.31f";
+const APP_VERSION = "2026.10.31g";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031f" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261031g" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -2485,7 +2490,7 @@ function startController(code, pid) {
     if (r.spoil && !r.text) r.text = `Until end of turn, creatures target player controls lose all abilities and have base P/T ${r.spoil.pt}.`;
     if (r.necroSel && !r.text) r.text = "Destroy all creatures, then return one of the creature cards that died to the battlefield under your control.";
     if (r.imprintLib && !r.text) r.text = `Search your library for ${/^[aeiou]/i.test(r.imprintLib.what) ? "an" : "a"} ${r.imprintLib.what} card and exile it (imprint).`;
-    if (r.sacNPick && !r.text) r.text = `Sacrifice ${r.sacNPick.n} ${r.sacNPick.what}s to activate ${r.src}.`;
+    if (r.sacNPick && !r.text) r.text = `Sacrifice ${r.sacNPick.n} ${r.sacNPick.what}${r.sacNPick.n === 1 ? "" : "s"} to activate ${r.src}.`;
     if (r.flipFace && !r.text) r.text = r.flipFace.reenter ? (r.flipFace.front ? "Exile it, then return it to the battlefield (front face up)." : "Exile it, then return it to the battlefield transformed.") : "Transform it.";
     if (r.eachDraw && !r.text) r.text = `Each player draws ${r.eachDraw.n === "X" ? "X" : r.eachDraw.n} card${r.eachDraw.n === 1 ? "" : "s"}.`;
     if (r.revealMv && !r.text) r.text = r.revealMv === "lose" ? "Reveal the top card of your library and put it into your hand. You lose life equal to its mana value." : "Reveal the top card of your library and put it into your hand. Each opponent loses X life and you gain X life (X = its mana value).";
@@ -7519,18 +7524,27 @@ function startController(code, pid) {
     if (c.forage && !opts.foraged) { reminders.push({ id: newId(), src: name, text: "Forage (cost): exile three cards from your graveyard or sacrifice a Food.", times: 1, forage: { id, i } }); render(); return; }
     let tokKey = null, sacCard = null, sacMany = null, xVal = null;
     const sx = String(ab.cost || "").match(/sacrifice x ([a-z]+?)s?(?:,|$)/i);
-    if (sx) {
-      const want = sx[1].toLowerCase(), stacks = Object.entries(me.tokens || {}).filter(([, t]) => t.name.toLowerCase() === want && t.count > 0);
-      const have = stacks.reduce((a, [, t]) => a + t.count, 0);
-      const x = Math.floor(Number(prompt(`${name}: sacrifice how many ${sx[1]}s? (X — you have ${have} ${sx[1]} tokens)`, String(have))) || 0);
+    // which of my tokens / cards a "sacrifice N [type]s" cost can use: "tokens" = any token; "artifacts" includes Treasures; a subtype matches by name or type
+    const tokFits = (t, w) => t.count > 0 && (w === "token" || t.name.toLowerCase() === w || permMatch(tokenAsPerm(t), parseTargetFilter(w)));
+    const cardFits = (bid, x, w) => bid !== id && w !== "token" && (permMatch(x, parseTargetFilter(w)) || new RegExp(`\\b${w}`, "i").test(x.t || ""));
+    if (sx && opts.sacNDone && opts.xVal != null) { xVal = opts.xVal; c.sacOther = false; }
+    else if (sx) {
+      const want = singular(sx[1].toLowerCase()), stacks = Object.entries(me.tokens || {}).filter(([, t]) => tokFits(t, want));
+      const have = stacks.reduce((a, [, t]) => a + t.count, 0), cardsN = Object.entries(me.bf || {}).filter(([bid, x]) => cardFits(bid, x, want)).length;
+      const x = Math.floor(Number(prompt(`${name}: sacrifice how many ${sx[1]}s? (X — you have ${have + cardsN})`, String(have + cardsN))) || 0);
       if (x <= 0) return;
-      if (x > have) { toast(`You only have ${have} ${sx[1]} tokens (sacrifice creature cards by hand).`); return; }
+      if (x > have + cardsN) { toast(`You only have ${have + cardsN} ${sx[1]}s.`); return; }
+      if (cardsN && x > 0) { reminders.push(normalizeRem({ id: newId(), src: name, srcId: id, text: "", times: 1, sacNPick: { n: x, what: want, id, i, x } })); render(); return; }
       let left = x; sacMany = stacks.map(([k, t]) => { const n = Math.min(left, t.count); left -= n; return [k, n, t.name]; }).filter(([, n]) => n);
       xVal = x; c.sacOther = false;
     }
-    if (c.sacMany && !sacMany) {
-      const want = c.sacMany.what.toLowerCase(), stacks = Object.entries(me.tokens || {}).filter(([, t]) => t.name.toLowerCase() === want && t.count > 0);
+    if (c.sacMany && !sacMany && opts.sacNDone) c.sacOther = false; // picked already (cards and tokens)
+    else if (c.sacMany && !sacMany) {
+      const want = singular(c.sacMany.what.toLowerCase()), stacks = Object.entries(me.tokens || {}).filter(([, t]) => tokFits(t, want));
       const have = stacks.reduce((a, [, t]) => a + t.count, 0);
+      // "Sacrifice two Mountains / two Humans": cards count too, so let the player pick
+      const cards = Object.entries(me.bf || {}).filter(([bid, x]) => cardFits(bid, x, want));
+      if ((cards.length || stacks.length > 1) && have + cards.length >= c.sacMany.n) { reminders.push(normalizeRem({ id: newId(), src: name, srcId: id, text: "", times: 1, sacNPick: { n: c.sacMany.n, what: singular(c.sacMany.what), id, i } })); render(); return; }
       if (have < c.sacMany.n) { toast(`You need ${c.sacMany.n} ${c.sacMany.what}s to sacrifice (you have ${have}).`); return; }
       let left = c.sacMany.n; sacMany = stacks.map(([k, t]) => { const n = Math.min(left, t.count); left -= n; return [k, n, t.name]; }).filter(([, n]) => n);
       c.sacOther = false;
@@ -8673,7 +8687,7 @@ function startController(code, pid) {
         if (vals.length !== k.n) { toast(`Pick exactly ${k.n}.`); break; }
         reminders = reminders.filter(x => x !== r);
         sacrificeChosen(vals, r.src);
-        if (k.id) setTimeout(() => activate(k.id, k.i, { sacNDone: true }), 0);
+        if (k.id) setTimeout(() => activate(k.id, k.i, { sacNDone: true, ...(k.x != null ? { xVal: k.x } : {}) }), 0);
         break;
       }
       case "rv-go": {

@@ -2998,6 +2998,10 @@ function condOf(c) {
   if (/^(?:this creature|it|this [a-z]+)(?:'s| is) untapped$/.test(c)) return { k: "untapped" };
   if (/^(?:this creature|it)(?:'s| is) tapped$/.test(c)) return { k: "tapped" };
   if (/^(?:this creature|it) is monstrous$/.test(c)) return { k: "monstrous" };
+  if ((m = c.match(/^there are (\w+) or more (permanent|historic|creature|land|artifact|instant and\/or sorcery) cards in your graveyard$/))) return { k: "gyKind", n: CB_NUM[m[1]] || Number(m[1]), w: m[2] };
+  if ((m = c.match(/^there(?:'s| is) an? ([a-z]+) card in your graveyard$/))) return { k: "gyKind", n: 1, w: m[1] };
+  if (/^(?:this creature|it)(?:'s| is) attacking$/.test(c)) return { k: "attacking" };
+  if ((m = c.match(/^(?:it|that creature|equipped creature|enchanted creature)(?:'s| is) (?:an? )?(legendary|artifact|[a-z]+)$/)) && !/^(attacking|blocking|tapped|untapped|equipped|enchanted|monstrous)$/.test(m[1])) return { k: "hostIs", w: m[1] };
   return null;
 }
 export function condBuffs(card) {
@@ -3016,6 +3020,7 @@ export function condBuffs(card) {
     if (!who) for (const [re, w] of [[new RegExp(`^as long as (.+?), ${SELF} ${EFF}\\.$`, "i"), "self"], [new RegExp(`^as long as (.+?), (enchanted|equipped) creature ${EFF}\\.$`, "i"), "att"], [new RegExp(`^as long as (.+?), (other )?creatures you control ${EFF}\\.$`, "i"), "team"]])
       if ((m = l.match(re))) { const gg = m.slice(1); g = [...gg.slice(-4), gg[0]]; who = w === "team" ? (gg[1] ? "team-other" : "team") : w; break; }
     if (!who) return;
+    if (who === "self" && /^(?:equipped|enchanted) creature\b/i.test(g[4] || "")) who = "att"; // "As long as equipped creature is legendary, it has hexproof"
     const cond = condOf(g[4]); if (!cond) return;
     out.push({ who, dp: Number(g[0] || 0), dt: Number(g[1] || 0), kws: String(g[2] || g[3] || "").split(/,? and |, /).map(x => x.trim().toLowerCase()).filter(Boolean), cond, text: l });
   });
