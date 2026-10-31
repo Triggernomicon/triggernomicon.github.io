@@ -782,7 +782,7 @@ function parseCond(cond, cardName) {
   if (m) return { ...(/with the same name as/.test(c) ? { check: true } : {}), ev: "oppcast", what: m[3] || "", self: m[1] === "a player", first: m[2] === "their first", ...(m[2] === "their second" ? { nth: 2 } : {}), ...(m[4] ? (m[5] === "less" ? { mvMax: Number(m[4]) } : { mvMin: Number(m[4]) }) : {}) };
   m = c.match(/you cast (?:(an|a|your first|your second|your third|another) )?(.*?) ?spell(?: with mana value (\d+) or greater)?/);
   if (m) m = [m[0], m[2], m[3], m[1]];
-  if (m) return { ev: "cast", ...(/^your (second|third)$/.test(m[3] || "") && !m[1] ? { nth: { "your second": 2, "your third": 3 }[m[3]] } : {}), what: (m[1] || "").replace(/\s*from anywhere other than your hand/, ""), ...(m[2] ? { mvMin: Number(m[2]) } : {}), ...(/from anywhere other than your hand/.test(c) ? { notHand: true } : {}), ...(/\bspell from exile$/.test(c) ? { fromEx: true } : {}), ...(/\bspell from your graveyard$/.test(c) ? { fromGy: true } : {}) };
+  if (m) return { ev: "cast", ...(/ during an opponent's turn$/.test(c) ? { turn: "opp", askIfUnknown: "Only during an opponent's turn." } : / during your turn$/.test(c) ? { turn: "mine", askIfUnknown: "Only during your turn." } : {}), ...(/^your (second|third)$/.test(m[3] || "") && !m[1] ? { nth: { "your second": 2, "your third": 3 }[m[3]] } : {}), what: (m[1] || "").replace(/\s*from anywhere other than your hand/, ""), ...(m[2] ? { mvMin: Number(m[2]) } : {}), ...(/from anywhere other than your hand/.test(c) ? { notHand: true } : {}), ...(/\bspell from exile$/.test(c) ? { fromEx: true } : {}), ...(/\bspell from your graveyard$/.test(c) ? { fromGy: true } : {}) };
   // Spinneret and Spiderling: "whenever you attack with two or more Spiders"
   m = c.match(/^you attack with (two|three|four|five|six|seven|eight|\d+) or more ([a-z ]+?)$/);
   if (m) return { ev: "attackN", min: num(m[1]), types: splitTypes(m[2].replace(/\bcreatures?\b/, "").trim() || "creature") };
@@ -898,7 +898,8 @@ export function parseAbilities(card) {
     if (ph) {
       const phase = /postcombat/i.test(ph[2]) ? "main2" : /combat/i.test(ph[2]) ? "combat" : /upkeep/i.test(ph[2]) ? "upkeep" : /draw/i.test(ph[2]) ? "draw" : /main/i.test(ph[2]) ? "main1" : "end";
       const whose = /opponent/i.test(ph[1]) ? "opp" : /^your$/i.test(ph[1]) ? "your" : "each";
-      cond = { ev: "phase", phase, whose, ...(whoUp && !/end step|each upkeep/i.test(whoUp[0]) ? { check: true, askNote: `Only on ${(whoUp[1] || whoUp[2] || "that player's").replace(/'s$/, "")}'s upkeep.` } : {}) };
+      cond = { ev: "phase", phase, whose, ...(whoUp && /^enchanted player's$/i.test(whoUp[2] || "") ? { enchP: true, askIfUnknown: "Only on enchanted player's upkeep." } // Curses: the app knows which player it enchants
+        : whoUp && !/end step|each upkeep/i.test(whoUp[0]) ? { check: true, askNote: `Only on ${(whoUp[1] || whoUp[2] || "that player's").replace(/'s$/, "")}'s upkeep.` } : {}) };
       text = ph[3];
       // Tippy-Toe: "At the beginning of your end step, if you gained life this turn, draw a card."
       if (/^if you gained life this turn, /i.test(text)) { cond = { ...cond, ifGained: true }; text = text.replace(/^if you gained life this turn, /i, ""); }
@@ -1320,6 +1321,7 @@ function matches(cond, ev, srcId) {
       return matches({ ...cond, ev: "cast" }, { ...ev, type: "cast", id: null }, srcId);
     case "cast": {
       if (ev.type !== "cast" || (ev.id && ev.id === srcId)) return 0; // a spell doesn't see itself being cast
+      if (!turnOk(cond)) return 0; // Dream Spoilers: "during an opponent's turn"
       if (ev.copied && !/\bor copy\b/.test(cond.what || "")) return 0; // a copy that wasn't cast: only magecraft ("cast or copy") sees it
       if (cond.notHand && !ev.fromZone) return 0; // Spider-Verse
       if (cond.fromEx && ev.fromZone !== "ex") return 0; // Appa: "cast a spell from exile"
@@ -1331,6 +1333,7 @@ function matches(cond, ev, srcId) {
       const t = ev.card.t || "", w = cond.what, COLS = { white: "W", blue: "U", black: "B", red: "R", green: "G" };
       if (COLS[w]) return new RegExp(`\\{[^}]*${COLS[w]}[^}]*\\}`).test(ev.card?.m || "") ? 1 : 0;
       if (w === "permanent") return /\b(Instant|Sorcery)\b/.test(t) ? 0 : 1;
+      { const nw = w && w !== "noncreature" && w.match(/^non-?(artifact|enchantment|land|legendary|instant|sorcery|planeswalker|battle|[a-z]+)$/); if (nw) return COLS[nw[1]] ? (new RegExp(`\\{[^}]*${COLS[nw[1]]}[^}]*\\}`).test(ev.card?.m || "") ? 0 : 1) : new RegExp(`\\b${nw[1]}\\b`, "i").test(t) ? 0 : 1; } // Chimeric Egg: "a nonartifact spell"; "a non-Elf spell"
       { const cw = w && w.match(/^(white|blue|black|red|green|multicolored|colorless|monocolored) (.+)$/); // Defilers: "a green permanent spell"; "a red creature spell", "a blue instant or sorcery spell"
         if (cw) { const n = ["W", "U", "B", "R", "G"].filter(k => new RegExp(`\\{[^}]*${k}[^}]*\\}`).test(ev.card?.m || "")).length;
           const colOk = cw[1] === "multicolored" ? n >= 2 : cw[1] === "colorless" ? n === 0 : cw[1] === "monocolored" ? n === 1 : new RegExp(`\\{[^}]*${COLS[cw[1]]}[^}]*\\}`).test(ev.card?.m || "");
@@ -1776,7 +1779,8 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if ((t.lvl || 1) > (s.e.lvl || 1)) continue; // a Class level not reached yet
         let times = matches(t.cond, evx, s.id);
         if (!times) continue;
-        const unk = condUnknown && t.cond.askIfUnknown;
+        let unk = condUnknown && t.cond.askIfUnknown;
+        if (t.cond.enchP) { const enc = p.bf?.[s.id]?.encOpp; if (enc && evx.active && evx.active !== enc) continue; if (!enc || !evx.active) unk = t.cond.askIfUnknown; } // a Curse: only on the upkeep of the player it enchants
         if (t.cond.firstTurn) { const k = `${s.id}:${ti}:first`; p.onceT ||= {}; if (p.onceT[k] === ctx.turnNo) continue; p.onceT[k] = ctx.turnNo; times = 1; } // Rielle, Veronica: "for the first time each turn"
         if (unk && t.auto) { ctx.remind.push({ src: label(s.e), srcId: s.id, text: t.text, times, effs: t.effs, count: evx.n || 1, note: t.cond.askIfUnknown }); continue; }
         if (t.effs?.some(f => f.n?.spellMv)) t = { ...t, effs: t.effs.map(f => f.n?.spellMv ? { ...f, n: manaValue(evx.card?.m || "") } : f) }; // Ovika: X = that spell's mana value

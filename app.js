@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261030d";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030d";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030d";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030d";
+import { firebaseConfig } from "./config.js?v=20261030e";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261030e";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261030e";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck } from "./engine.js?v=20261030e";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -805,10 +805,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.10.30d";
+const APP_VERSION = "2026.10.30e";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030d" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261030e" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -1784,6 +1784,10 @@ function startController(code, pid) {
       if (!still.length) return;
       mutate(p => still.forEach(([sid, a]) => { if (a.bestowT && p.bf[sid]) { p.bf[sid].t = a.bestowT; delete p.bf[sid].bestowT; delete p.bf[sid].att; } else if (/\bAura\b/.test(a.t || "")) { delete p.bf[sid]; toZone(p, a, "gy"); } else if (p.bf[sid]) delete p.bf[sid].att; }), true);
       still.forEach(([, a]) => logTo(code, /\bAura\b/.test(a.t || "") ? `📎 ${me.name}'s ${dispName(a)} went to the graveyard (what it enchanted left)` : `📎 ${me.name}'s ${dispName(a)} is unattached (what it equipped left)`));
+      const gone = still.filter(([, a]) => !a.bestowT && /\bAura\b/.test(a.t || ""));
+      gone.forEach(([sid, a]) => { const pg = String(a.o || lookupCard(a.n)?.o || "").match(/^When (?:this (?:aura|enchantment|permanent)|[^,\n]+?) is put into (?:a|your) graveyard from the battlefield, ([^\n]+)$/m); // Audacity, Hopeful Vigil: their own trigger
+        if (pg && !/^return it to its owner's hand/i.test(pg[1])) reminders.push(normalizeRem({ id: newId(), src: dispName(a), text: pg[1][0].toUpperCase() + pg[1].slice(1), times: 1 })); });
+      if (gone.length) act(gone.map(([sid, a]) => ({ type: "gy", name: a.n, t: a.t || "", n: 1, token: false, ids: [sid] }))); // enchantress payoffs: "an enchantment is put into a graveyard"
     }, 0);
     if (ctx.others?.length) seated(room).filter(o => o.id !== pid && !isOut(o)).forEach(o => sendOrders({ [o.id]: {} }, { how: "fx", effs: ctx.others, src: ctx.others[0].src || "" }));
     if (eqToks.length && events.some(ev => ev.type === "dies" && ev.token)) eqToks.forEach(([k, c, eqs]) => { if ((me.tokens?.[k]?.count || 0) < c) leaveHooks([], "die", eqs); });
