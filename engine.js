@@ -471,7 +471,7 @@ function parseEffects0(text, cardName = "") {
   // "Tap target creature." / "Tap up to two target creatures." (no lock)
   { const tp = !effs.some(f => f.k === "tapLock") && text.match(/(?:^|\. )tap (?:up to (one|two|three) |(two|three) )?target (creatures?|artifacts? or creatures?|creatures? or artifacts?|nonland permanents?|permanents?)(?: (?:an opponent controls|you don't control|your opponents control))?\./i);
     const held = /(?:doesn't|don't) untap during (?:its|their) controllers?'?s? untap steps? for as long as you control/i.test(text);
-    if (tp) { const k = num(tp[1] || tp[2]) || 1; for (let i = 0; i < k; i++) effs.push({ k: "tapLock", what: tp[3].replace(/s\b/g, ""), ...(held ? {} : { noLock: true }), lockNext: /(?:doesn't|don't) untap during (?:its|their) controllers?'?s? next untap steps?/i.test(text) }); } }
+    if (tp) { const k = num(tp[1] || tp[2]) || 1; for (let i = 0; i < k; i++) effs.push({ k: "tapLock", what: tp[3].replace(/s\b/g, ""), ...(/an opponent controls|you don't control|your opponents control/i.test(tp[0]) ? { opp: true } : {}), ...(held ? {} : { noLock: true }), lockNext: /(?:doesn't|don't) untap during (?:its|their) controllers?'?s? next untap steps?/i.test(text) }); } }
   // Board damage: Pyroclasm, Blasphemous Act, Chain Reaction, Earthquake
   const da = text.match(/deals (\d+|x|one|two|three|four|five|six|seven|thirteen) damage to each (other )?(creature(?: and each planeswalker)?(?: without flying)?(?: with flying)?|creature your opponents control|creature you don't control|creature and planeswalker(?: your opponents control)?)( and each (?:player|opponent))?/i);
   if (da) effs.push({ k: "dmgAll", n: /^x$/i.test(da[1]) ? (/where x is the number of creatures on the battlefield/i.test(text) ? "creatures" : "X") : (num(da[1]) ?? (da[1].toLowerCase() === "thirteen" ? 13 : 0)),
@@ -1687,7 +1687,7 @@ export function runEvents(p, events, ctx, { enabled = true, lookup, env = null, 
         if (f.k === "addType") ctx.remind.push({ src, srcId, text: `Target ${f.what} becomes ${/^[aeiou]/i.test(f.type) ? "an" : "a"} ${f.type.toLowerCase()} in addition to its other types until end of turn.`, addType: f, times: 1 });
         if (f.k === "copyNext") { p.riders = [...(p.riders || []).filter(x => x.turnNo === ctx.turnNo), { kind: "copyNext", ctype: f.type, src, at: Date.now(), turnNo: ctx.turnNo }]; ctx.logs.push(`⚙ ${src}: your next ${f.type} spell this turn gets copied`); }
         if (f.k === "arcum") ctx.remind.push({ src, srcId, text: "Target artifact creature's controller sacrifices it, then may search for a noncreature artifact and put it onto the battlefield.", arcum: true, times: 1 });
-        if (f.k === "tapLock") ctx.remind.push({ src, srcId, text: f.noLock ? `Tap target ${f.what}.${f.lockNext ? " It doesn't untap during its controller's next untap step." : ""}` : `Tap up to one target ${f.what}. It doesn't untap while you control ${src}.`, tapLock: { what: f.what, ...(f.noLock ? { noLock: true } : {}), ...(f.lockNext ? { lockNext: true } : {}) }, times: 1 });
+        if (f.k === "tapLock") ctx.remind.push({ src, srcId, text: f.noLock ? `Tap target ${f.what}.${f.lockNext ? " It doesn't untap during its controller's next untap step." : ""}` : `Tap up to one target ${f.what}. It doesn't untap while you control ${src}.`, tapLock: { what: f.what, ...(f.opp ? { opp: true } : {}), ...(f.noLock ? { noLock: true } : {}), ...(f.lockNext ? { lockNext: true } : {}) }, times: 1 });
         if (f.k === "exileRetMine" && !f.pick) { let k = 0; p.ex ||= {}; Object.entries(p.bf || {}).forEach(([id, x]) => { if (!/\bCreature\b/.test(x.t || "") || x.own) return; p.ex[id] = { n: x.n, t: x.t || "", m: x.m || "", img: x.img || "", ...(x.o ? { o: x.o } : {}), retEnd: true, src, at: Date.now() }; delete p.bf[id]; k++; });
           let tk = 0; if (!f.nontoken) Object.entries(p.tokens || {}).forEach(([key, t]) => { if (isCreatureToken(t.name)) { tk += t.count || 0; delete p.tokens[key]; } });
           ctx.logs.push(`⚙ ${src}: exiled ${k} creature${k === 1 ? "" : "s"}${tk ? ` (${tk} token${tk === 1 ? "" : "s"} gone for good)` : ""} — they return at the beginning of the next end step`); }
@@ -2889,7 +2889,7 @@ export function detectCombos(p, lookup, ctx = {}) {
     const colors = () => new Set(ents.flatMap(x => /\bLand\b/.test(x.t) ? [] : (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []))).size;
     const count = w => w === "color" ? colors() : /^[a-z]+$/.test(w) ? countTypes(p, [w]) : null;
     const covered = l => out.some(c => (c.pieces || []).length && c.pieces.every(x => l.pieces.includes(x)));
-    loopFind(ents.map(x => ({ n: x.n, o: x.o, t: x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null })), count).filter(l => !covered(l)).forEach(l => out.push(l));
+    loopFind(ents.map(x => ({ n: x.n, o: x.e.face != null && x.e.o ? x.e.o : x.o, t: x.e.face != null && x.e.t ? x.e.t : x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null, pair: x.e.pair ? (p.bf?.[x.e.pair]?.n || "?") : null })), count).filter(l => !covered(l)).forEach(l => out.push(l));
   }
   return out;
 }
@@ -2917,11 +2917,26 @@ export function loopRoles(c) {
     else if (q) { const w = (q[1] || "").trim().toLowerCase(); if (!w || /^(?:each|other|nontoken)$/.test(w)) r.plusOnEnter = true; else r.plusOnEnter = { only: w }; } }
   if (!r.plusOnEnter && (/whenever (?:a|another) (?:nontoken )?creature (?:you control )?enters(?: the battlefield)?(?: under your control)?(?: this turn)?, put (?:a|one|two) \+1\/\+1 counters? on (?:it|that creature|each creature you control)/i.test(o)
     || /\b(?:nontoken )?creatures you control have riot\b/i.test(o))) r.plusOnEnter = true;
-  if (/\bother (?:non-?[a-z]+ )?creatures you control have persist\b|\bcreatures you control have persist\b/i.test(o)) r.grantPersist = true;
-  if (/\bother (?:non-?[a-z]+ )?creatures you control have undying\b|\bcreatures you control have undying\b/i.test(o)) r.grantUndying = true;
+  if (/\b(?:each )?other (?:non-?[a-z]+ )?creatures? you control (?:have|has) persist\b|\bcreatures you control have persist\b/i.test(o)) r.grantPersist = true;
+  if (/\b(?:each )?other (?:non-?[a-z]+ )?creatures? you control (?:have|has) undying\b|\bcreatures you control have undying\b/i.test(o)) r.grantUndying = true;
+  // phase 2: life and damage
+  if (/whenever you gain life, put (?:a|one|that many) \+1\/\+1 counters? on (target creature|target creature you control|each creature you control|this creature|it|${lpEsc(short)}|${lpEsc(first)})/i.test(o)) r.gainCounter = (o.match(/whenever you gain life, put (?:a|one|that many) \+1\/\+1 counters? on ([^.]+?)[.,]/i) || [])[1]?.toLowerCase() || "";
+  if (lines.some(l => /^lifelink\b/i.test(l) || /^(?:flying|vigilance|deathtouch|first strike|trample|haste|reach|menace)(?:, [a-z ]+)*, lifelink\b/i.test(l))) r.lifelink = true;
+  { const g = o.match(/\b(creatures you control|other creatures you control|another target creature|target creature(?: you control)?|equipped creature|enchanted creature) (?:have|has|gains?|gain) [^.]*\blifelink\b/i); if (g) r.giveLifelink = g[1].toLowerCase(); }
+  if (new RegExp(`whenever you draw a card, ${SELF} deals (\\d+|one|two) damage to (?:any target|target opponent|each opponent|target player|target opponent or planeswalker)`, "i").test(o)) r.drawDmg = true;
+  { const dd = o.match(new RegExp(`whenever (enchanted creature|equipped creature|${SELF}) deals (?!combat )damage to an opponent, (?:you may )?draw a card`, "i")); if (dd && !/"[^"]*$/.test(o.slice(0, dd.index))) r.dmgDraw = /enchanted|equipped/i.test(dd[1]) ? "attached" : "self";
+    else if (/(?:enchanted|equipped) creature [^"]*\bhas "whenever this creature deals damage to an opponent, (?:you may )?draw a card/i.test(o)) r.dmgDraw = "attached";
+    else if (/paired with another creature, each of those creatures has "whenever this creature deals damage to an opponent, (?:you may )?draw a card/i.test(o)) r.dmgDraw = "paired"; }
+  // Kiki-Jiki / Splinter Twin: tap to copy a creature; a creature whose entering untaps something
+  if (/^\{T\}: create a token that's a copy of target (nonlegendary )?creature you control/im.test(o)) r.tapCopy = { nonleg: /target nonlegendary creature/i.test(o) };
+  if (/enchanted creature has "\{T\}: create a token that's a copy of this creature/i.test(o)) r.giveTapCopy = true;
+  if (r.creature && new RegExp(`when ${SELF} enters, (?:you may )?(?:tap or untap|untap) (?:another )?target (?:permanent|creature|artifact or creature)|when ${SELF} enters, choose one —[^]*?• untap target permanent you control|when ${SELF} enters, gain control of target permanent until end of turn\\. untap that permanent|when ${SELF} enters, untap all creatures you control|when ${SELF} enters, creatures target player controls [^.]*\\. untap them`, "i").test(o)) r.etbUntap = true;
+  { const bl = r.creature && o.match(new RegExp(`when ${SELF} enters, (?:you may )?exile (?:another )?target (non-?([A-Za-z]+) )?(?:creature|permanent|artifact or creature) you control, then return (?:that card|it) to the battlefield`, "i")); if (bl) r.etbBlink = { not: bl[2] ? bl[2].toLowerCase() : null }; }
+  if (/whenever a creature enters(?: the battlefield)?, untap all creatures/i.test(o)) r.untapOnEnter = true;
   for (const l of lines) {
     const m = l.match(/^([^:"]+?):\s*(.+)$/); if (!m) continue;
     const cost = m[1], eff = m[2];
+    if (new RegExp(`^remove a \\+1\\/\\+1 counter from ${SELF}$`, "i").test(cost) && new RegExp(`^(?:${SELF}|it) deals 1 damage to any target`, "i").test(eff)) r.ctrPing = true;
     // free sacrifice outlet: "Sacrifice a creature: …" (no mana, no tap)
     const sc = cost.match(/^sacrifice (a|another) (?:non-?token )?(creature|[A-Z][a-z]+)$/i);
     if (sc && !/\{/.test(cost) && !/once each turn|gains control of/i.test(eff)) r.sac = { another: /another/i.test(sc[1]), what: sc[2].toLowerCase() };
@@ -2959,6 +2974,30 @@ export function loopFind(cards, count = null) {
   // persist + undying on the same creature: the +1/+1 and -1/-1 counters cancel, so it always comes back
   for (const G of R.filter(x => x.grantPersist || x.grantUndying)) for (const P of R.filter(x => x.n !== G.n && x.creature && (G.grantPersist ? x.undying : x.persist))) for (const S of sacs) { if (!sacFits(S, P)) continue;
     add([G.n, P.n, S.n], "Infinite death and enters triggers", `${G.n} gives ${P.n} ${G.grantPersist ? "persist" : "undying"} on top of its own ${G.grantPersist ? "undying" : "persist"}: sacrifice it to ${S.n}, it comes back with one counter, and the next return cancels it, forever: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: P.n } }); }
+  // Heliod + Walking Ballista: gaining life puts a +1/+1 counter, the counter pings with lifelink, which gains life…
+  for (const G of R.filter(x => x.gainCounter != null)) for (const B of R.filter(x => x.ctrPing && x.creature)) {
+    const reach = /target creature|each creature you control/.test(G.gainCounter) || G.n === B.n;
+    if (!reach) continue;
+    const ll = B.lifelink ? B : R.find(x => x.giveLifelink && (x.n !== B.n || /creatures you control/.test(x.giveLifelink)) && !(x.giveLifelink === "another target creature" && x.n === B.n));
+    if (!ll) continue;
+    add([G.n, B.n, ll.n], "Infinite damage and life", `${B.n} removes a +1/+1 counter to deal 1 damage${ll.n === B.n ? " (it has lifelink)" : ` with lifelink from ${ll.n}`}; you gain 1 life, and ${G.n} puts the counter back: infinite damage and life.`, { win: true }); }
+  // Niv-Mizzet + Curiosity: each card drawn deals damage, each damage to an opponent draws a card
+  for (const X of R.filter(x => x.drawDmg)) for (const Y of R.filter(x => x.dmgDraw)) {
+    if (Y.dmgDraw === "self" && Y.n !== X.n) continue;
+    const yc = cards[R.indexOf(Y)]; if (Y.dmgDraw === "attached" && yc.live && yc.att !== X.n) continue;
+    if (Y.dmgDraw === "paired" && yc.live && yc.pair !== X.n) continue;
+    add([X.n, Y.n], "Infinite damage and card draw", `${X.n} deals damage whenever you draw; ${Y.dmgDraw === "self" ? "it" : `${Y.n} on it`} draws a card whenever it damages an opponent: each draw causes another (stop before your library runs out).`, { win: true }); }
+  // Kiki-Jiki + Pestermite: the copy enters and untaps the copier: infinite hasty tokens
+  for (const K of R.filter(x => x.tapCopy && x.creature)) for (const E2 of R.filter(x => x.etbUntap && x.n !== K.n)) {
+    if (K.tapCopy.nonleg && /\bLegendary\b/.test(E2.t)) continue;
+    add([K.n, E2.n], "Infinite hasty creature tokens", `${K.n} copies ${E2.n}; the copy enters and untaps ${K.n}, which copies it again: infinite hasty ${E2.n} tokens (and enters triggers).`, { kind: "tokens", tokenOf: E2.n }); }
+  for (const K of R.filter(x => x.tapCopy && x.creature)) for (const E2 of R.filter(x => x.n !== K.n && (x.etbBlink && !(x.etbBlink.not && new RegExp(`\\b${x.etbBlink.not}\\b`, "i").test(K.t)) || x.untapOnEnter))) {
+    if (K.tapCopy.nonleg && E2.etbBlink && /\bLegendary\b/.test(E2.t)) continue;
+    const what = E2.untapOnEnter ? R.find(x => x.creature && x.n !== K.n && (!K.tapCopy.nonleg || !/\bLegendary\b/.test(x.t))) : E2; if (!what) continue;
+    add(E2.untapOnEnter ? [K.n, E2.n, what.n] : [K.n, E2.n], "Infinite hasty creature tokens", E2.untapOnEnter ? `${K.n} copies ${what.n}; the copy entering untaps all creatures (${E2.n}), so ${K.n} can copy again: infinite hasty tokens.` : `${K.n} copies ${E2.n}; the copy enters and blinks ${K.n}, which comes back untapped and copies again: infinite hasty ${E2.n} tokens.`, { kind: "tokens", tokenOf: what.n }); }
+  for (const T of R.filter(x => x.giveTapCopy)) for (const E2 of R.filter(x => x.etbUntap)) {
+    const tc = cards[R.indexOf(T)]; if (tc.live && tc.att !== E2.n) continue;
+    add([T.n, E2.n], "Infinite hasty creature tokens", `${T.n} on ${E2.n}: tap it to copy it; the copy enters and untaps ${E2.n}: infinite hasty ${E2.n} tokens (and enters triggers).`, { kind: "tokens", tokenOf: E2.n }); }
   for (const D of R.filter(x => x.minusUntap && x.mana)) for (const X of R.filter(x => x.n !== D.n && x.noMinus))
     add([D.n, X.n], "Infinite colored mana", `${D.n} taps for mana, then puts a -1/-1 counter on itself to untap; ${X.n} stops the counter, so it never dies: infinite mana.`, D.mana.cols.length === 1 ? { kind: "mana", sym: `{${D.mana.cols[0]}}` } : {});
   for (const U of R.filter(x => x.untap)) for (const M of R.filter(x => x.mana && x.n !== U.n && lpTypeOk(x, U.untap.what))) {
@@ -3010,7 +3049,8 @@ export function deckCombos(names, cmds = [], lookup = null) {
   const fullMin = full.filter(f => !full.some(g => g !== f && g.pieces.length < f.pieces.length && sub(g.pieces, f.pieces) && f.feats.every(x => g.feats.includes(x)))).sort((a, b) => a.pieces.length - b.pieces.length);
   const nearList = [...near.entries()].map(([card, list]) => ({ card, combos: list.sort((a, b) => a.pieces.length - b.pieces.length) })).sort((a, b) => b.combos.length - a.combos.length);
   // loops the app works out from the card text, that Spellbook's list didn't already give
-  const loops = lookup ? loopFind(names.map(n => { const c = lookup(n); return c ? { n, o: c.o || "", t: c.t || "", m: c.m } : null; }).filter(Boolean)).filter(l => !fullMin.some(f => f.pieces.every(x => l.pieces.includes(x)))) : [];
+  // a double-faced card counts with both faces (it can transform into the piece that loops)
+  const loops = lookup ? loopFind(names.map(n => { const c = lookup(n); if (!c) return null; const back = c.faces?.[1]; return { n, o: [c.o || "", back?.o && back.o !== c.o ? back.o : ""].filter(Boolean).join("\n"), t: [c.t || "", back?.t || ""].filter(Boolean).join(" // "), m: c.m }; }).filter(Boolean)).filter(l => !fullMin.some(f => f.pieces.every(x => l.pieces.includes(x)))) : [];
   return { full: fullMin, near: nearList, loops };
 }
 // ----- Commander Brackets (Wizards of the Coast, beta; Game Changers as of the February 9, 2026 update, still current in October 2026) -----
