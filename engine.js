@@ -2933,6 +2933,11 @@ export function loopRoles(c) {
   if (r.creature && new RegExp(`when ${SELF} enters, (?:you may )?(?:tap or untap|untap) (?:another )?target (?:permanent|creature|artifact or creature)|when ${SELF} enters, choose one —[^]*?• untap target permanent you control|when ${SELF} enters, gain control of target permanent until end of turn\\. untap that permanent|when ${SELF} enters, untap all creatures you control|when ${SELF} enters, creatures target player controls [^.]*\\. untap them`, "i").test(o)) r.etbUntap = true;
   { const bl = r.creature && o.match(new RegExp(`when ${SELF} enters, (?:you may )?exile (?:another )?target (non-?([A-Za-z]+) )?(?:creature|permanent|artifact or creature) you control, then return (?:that card|it) to the battlefield`, "i")); if (bl) r.etbBlink = { not: bl[2] ? bl[2].toLowerCase() : null }; }
   if (/whenever a creature enters(?: the battlefield)?, untap all creatures/i.test(o)) r.untapOnEnter = true;
+  { const cr = o.match(/activated abilities of creatures (?:you control )?cost \{(\d)\} less to activate/i) || o.match(/abilities you activate that aren't mana abilities cost \{(\d)\} less to activate/i); if (cr) r.abilReduce = Number(cr[1]); }
+  // phase 3: blink for mana — "{1}{U}: Exile this creature, then return it" (Deadeye Navigator, Eldrazi Displacer) + "When this enters, untap up to five lands" (Peregrine Drake)
+  { const ul = r.creature && o.match(new RegExp(`when ${SELF} enters, untap up to (two|three|four|five|six|seven|\\d+) lands`, "i")); if (ul) r.etbLands = ({ two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 })[ul[1].toLowerCase()] || Number(ul[1]); }
+  { const em = r.creature && o.match(new RegExp(`when ${SELF} enters, add ((?:\\{[WUBRGC]\\})+)`, "i")); if (em && !new RegExp(`when ${SELF} enters, add (?:\\{[WUBRGC]\\})+\\. spend this mana only`, "i").test(o)) r.etbMana = { n: (em[1].match(/\{/g) || []).length, cols: [...new Set(em[1].match(/[WUBRGC]/g))] }; }
+  { const pb = o.match(/paired with another creature, each of those creatures has "((?:\{[^}]+\})+): exile this creature, then return it to the battlefield/i); if (pb) r.blink = { mv: lpMv(pb[1]), cols: lpCols(pb[1]), cost: pb[1], paired: true }; }
   for (const l of lines) {
     const m = l.match(/^([^:"]+?):\s*(.+)$/); if (!m) continue;
     const cost = m[1], eff = m[2];
@@ -2953,6 +2958,8 @@ export function loopRoles(c) {
     // untap others: "{1}{G}: Untap target creature", Aura "{U}: Untap enchanted creature"
     const ut = eff.match(/^untap (target|another target|enchanted|equipped) (creature|artifact|land|permanent)\.?$/i);
     if (ut && /^(?:\{[^}]+\})+$/.test(cost) && !/\{T\}|\{Q\}/.test(cost)) r.untap = { mv: lpMv(cost), cols: lpCols(cost), what: ut[2].toLowerCase(), attached: /enchanted|equipped/i.test(ut[1]), cost };
+    { const bx = eff.match(/^exile (another target creature|target creature you control|another target creature you control|this creature|target creature), then return (?:it|that card) to the battlefield/i);
+      if (bx && /^(?:\{[^}]+\})+$/.test(cost) && !/\{T\}/.test(cost)) r.blink = { mv: lpMv(cost), cols: [...lpCols(cost), ...(cost.match(/\{C\}/g) || []).map(() => "C")], cost, self: /this creature/i.test(bx[1]), other: /another/i.test(bx[1]) }; }
     // "Put a -1/-1 counter on this creature: Untap this creature."
     if (new RegExp(`^put a -1\\/-1 counter on ${SELF}$`, "i").test(cost) && new RegExp(`^untap ${SELF}\\.?$`, "i").test(eff)) r.minusUntap = true;
   }
@@ -2998,6 +3005,19 @@ export function loopFind(cards, count = null) {
   for (const T of R.filter(x => x.giveTapCopy)) for (const E2 of R.filter(x => x.etbUntap)) {
     const tc = cards[R.indexOf(T)]; if (tc.live && tc.att !== E2.n) continue;
     add([T.n, E2.n], "Infinite hasty creature tokens", `${T.n} on ${E2.n}: tap it to copy it; the copy enters and untaps ${E2.n}: infinite hasty ${E2.n} tokens (and enters triggers).`, { kind: "tokens", tokenOf: E2.n }); }
+  for (const B of R.filter(x => x.blink)) for (const M of R.filter(x => (x.etbLands || x.etbMana) && (B.blink.self ? x.n === B.n : x.n !== B.n || B.blink.paired))) {
+    if (B.blink.other && M.n === B.n) continue;
+    if (B.blink.paired) { const bc = cards[R.indexOf(B)]; if (bc.live && bc.pair !== M.n && M.n !== B.n) continue; }
+    const bigLands = M.etbLands ? R.filter(x => /\bLand\b/.test(x.t) && (x.mana?.n || 0) >= 2).sort((a, b) => b.mana.n - a.mana.n).slice(0, M.etbLands) : [];
+    const make0 = M.etbLands || M.etbMana.n, make = make0 + bigLands.reduce((a, x) => a + x.mana.n - 1, 0), cOk = !M.etbMana || B.blink.cols.every(c => M.etbMana.cols.includes(c));
+    const red = B.creature || B.blink.paired ? R.filter(x => x.abilReduce && x.n !== M.n).sort((a, b) => b.abilReduce - a.abilReduce)[0] : null;
+    const cost = red ? Math.max(Math.max(1, B.blink.cols.length), B.blink.mv - red.abilReduce) : B.blink.mv;
+    if (make < cost || !cOk) continue;
+    const feat = make > cost ? "Infinite mana and enters triggers" : "Infinite enters and leaves triggers";
+    if (make0 < cost && bigLands.length) { add([B.n, M.n, ...bigLands.map(x => x.n), ...(red && make0 <= B.blink.mv ? [red.n] : [])], feat, `Blink ${M.n} with ${B.n} (${cost} mana${red ? ` with ${red.n}` : ""}); it untaps ${bigLands.map(x => x.n).join(" and ")} (which tap for more than one mana) and other lands: ${make > cost ? "infinite mana" : "it pays for itself"} and infinite enters and leaves triggers.`); continue; }
+    if (red && make <= B.blink.mv) { add([B.n, M.n, red.n], feat, `${red.n} makes ${B.n}'s blink cost ${cost}; blink ${M.n}, it ${M.etbLands ? `untaps up to ${M.etbLands} lands` : `adds ${M.etbMana.n} mana`}, ${make > cost ? "more than that: infinite mana" : "which pays for it again: infinite"} and enters and leaves triggers.`); continue; }
+    if (make === cost) { add([B.n, M.n], feat, `Pay ${B.blink.cost} to blink ${M.n} with ${B.n}; it ${M.etbLands ? `untaps up to ${M.etbLands} lands` : `adds ${M.etbMana.n} mana`}, which pays for the next blink: infinite enters and leaves triggers.`); continue; }
+    add([B.n, M.n], "Infinite mana and enters triggers", `Pay ${B.blink.cost} to blink ${M.n} with ${B.n}; it enters and ${M.etbLands ? `untaps up to ${M.etbLands} lands` : `adds ${M.etbMana.n} mana`}, more than the ${B.blink.mv} it cost${M.etbLands ? " (if your lands make the right colors)" : ""}: infinite mana and enters triggers.`); }
   for (const D of R.filter(x => x.minusUntap && x.mana)) for (const X of R.filter(x => x.n !== D.n && x.noMinus))
     add([D.n, X.n], "Infinite colored mana", `${D.n} taps for mana, then puts a -1/-1 counter on itself to untap; ${X.n} stops the counter, so it never dies: infinite mana.`, D.mana.cols.length === 1 ? { kind: "mana", sym: `{${D.mana.cols[0]}}` } : {});
   for (const U of R.filter(x => x.untap)) for (const M of R.filter(x => x.mana && x.n !== U.n && lpTypeOk(x, U.untap.what))) {
