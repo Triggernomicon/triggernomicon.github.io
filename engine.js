@@ -2889,7 +2889,7 @@ export function detectCombos(p, lookup, ctx = {}) {
     const colors = () => new Set(ents.flatMap(x => /\bLand\b/.test(x.t) ? [] : (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []))).size;
     const count = w => w === "color" ? colors() : /^[a-z]+$/.test(w) ? countTypes(p, [w]) : null;
     const covered = l => out.some(c => (c.pieces || []).length && c.pieces.every(x => l.pieces.includes(x)));
-    const lc = ents.map(x => ({ n: x.n, o: x.e.face != null && x.e.o ? x.e.o : x.o, t: x.e.face != null && x.e.t ? x.e.t : x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null, pair: x.e.pair ? (p.bf?.[x.e.pair]?.n || "?") : null, p1: (x.e.c?.p1p1 || 0) > 0 }));
+    const lc = ents.map(x => ({ n: x.n, o: x.e.face != null && x.e.o ? x.e.o : x.o, t: x.e.face != null && x.e.t ? x.e.t : x.t, m: lookup(x.n)?.m ?? x.e.m, p: x.e.p ?? lookup(x.n)?.p, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null, pair: x.e.pair ? (p.bf?.[x.e.pair]?.n || "?") : null, p1: (x.e.c?.p1p1 || 0) > 0 }));
     const ag = lc.some(c => /creature cards exiled with/i.test(c.o || "")), exiled = ag ? Object.values(p.ex || {}).map(e => ({ n: e.n, o: String(lookup(e.n)?.o || e.o || ""), t: e.t || lookup(e.n)?.t || "", m: lookup(e.n)?.m ?? e.m, live: true })).filter(c => /\bCreature\b/.test(c.t)) : null;
     const lk = lc.map(c => `${c.n}|${c.att || ""}|${c.pair || ""}|${c.t}|${ag && c.p1 ? 1 : ""}`).sort().join("#") + "#" + Object.values(p.tokens || {}).map(t => `${t.name}:${t.count}`).sort().join(",") + (exiled ? "#ex:" + exiled.map(c => c.n).sort().join(",") : "");
     let found = LOOP_MEMO.get(lk); if (!found) { found = loopFind(lc, count, exiled ? { exiled } : {}); if (LOOP_MEMO.size > 60) LOOP_MEMO.clear(); LOOP_MEMO.set(lk, found); } // the board rarely changes between renders
@@ -2916,6 +2916,9 @@ export function loopRoles(c) {
   const r = { n: c.n, t, creature: /\bCreature\b/.test(t) };
   if (r.creature && lines.some(l => /^persist\b/i.test(l))) r.persist = true;
   if (r.creature && lines.some(l => /^undying\b/i.test(l))) r.undying = true;
+  if (r.creature && RX(`when ${SELF} dies, if it (?:wasn't|'s not|isn't) an? [A-Z][a-z]+, return it to the battlefield`, "i").test(o)) r.onceBack = true;
+  if (r.creature && (RX(`${SELF} enters with (?:a|one|two|three|\\d+) -1\\/-1 counters? on it`, "i").test(o) || RX(`${SELF} enters with a -1\\/-1 counter on it for each`, "i").test(o) || RX(`when ${SELF} enters, (?:you may )?(?:put a -1\\/-1 counter on target creature|blight 1)\\b`, "i").test(o))) r.minusEnter = true;
+  if (r.creature && RX(`${SELF} enters with (?:a|one|two|three|\\d+) (?:additional )?\\+1\\/\\+1 counters? on it`, "i").test(o)) r.plusEnterSelf = true;
   if (/-1\/-1 counters would be put on (?:a creature|a permanent|creatures|permanents) you control, that many (?:-1\/-1 counters )?minus one/i.test(o) || /creatures you control can't have -1\/-1 counters put on them/i.test(o) || /^counters can't be put on (?:artifacts, creatures, enchantments, or lands|permanents)/im.test(o)) r.noMinus = true;
   if (/^counters can't be put on (?:artifacts, creatures, enchantments, or lands|permanents)/im.test(o) || /\+1\/\+1 counters can't be put on (?:creatures|permanents)/i.test(o)) r.noPlus = true;
   { const q = o.match(/\b(?:each (?:other )?|other )?((?:non-?)?[A-Za-z]+ )?(?:nontoken )?creatures? you control enters? (?:the battlefield )?with (?:an |one |two |three )?additional \+1\/\+1 counters?(?! on (?:it|them) for each)/i);
@@ -2945,12 +2948,20 @@ export function loopRoles(c) {
   { const em = r.creature && o.match(RX(`when ${SELF} enters, add ((?:\\{[WUBRGC]\\})+)`, "i")); if (em && !RX(`when ${SELF} enters, add (?:\\{[WUBRGC]\\})+\\. spend this mana only`, "i").test(o)) r.etbMana = { n: (em[1].match(/\{/g) || []).length, cols: [...new Set(em[1].match(/[WUBRGC]/g))] }; }
   { const pb = o.match(/paired with another creature, each of those creatures has "((?:\{[^}]+\})+): exile this creature, then return it to the battlefield/i); if (pb) r.blink = { mv: lpMv(pb[1]), cols: lpCols(pb[1]), cost: pb[1], paired: true }; }
   if (r.creature && /^mutate \{/im.test(o)) r.mutate = true;
+  if (lines.some(l => /^flying\b/i.test(l))) r.flying = true;
+  if (/whenever a (?:nontoken )?creature you control without flying dies, return it to the battlefield/i.test(o)) r.flyReturn = true;
+  if (/^this creature can't have counters put on it/im.test(o)) r.noCtrSelf = true;
+  { const lr = r.creature && o.match(RX(`when ${SELF} (?:leaves the battlefield|dies), return (?:up to (one|two|three) )?(other |another )?target creature cards?(?: with (power|mana value) (\\d+) or less)? from your graveyard to the battlefield`, "i"));
+    if (lr) r.ltbReanim = { stat: lr[3] ? (lr[3] === "power" ? "p" : "mv") : null, max: lr[4] ? Number(lr[4]) : 99, another: !!lr[2] }; }
+  if (r.creature && (RX(`when ${SELF} enters, (?:you may )?exile another target creature\\.`, "i").test(o) || RX(`when ${SELF} enters, sacrifice it unless you exile a creature you control other than ${SELF}`, "i").test(o)) && RX(`when ${SELF} leaves the battlefield, return the exiled card to the battlefield`, "i").test(o)) r.oRing = true;
+  if (r.creature && RX(`when ${SELF} enters, [^"]*another target creature you control [^"]*gains? "when this creature dies, return it to the battlefield`, "i").test(o)) r.grantReturn = true;
+  if (r.creature && /you may have this creature enter as a copy of any creature card in a graveyard/i.test(o)) r.cloneGy = true;
   if (/whenever (?:this creature or )?another creature you control dies, create a treasure token/i.test(o)) r.deathTreasure = true;
   { const et = r.creature && o.match(RX(`when ${SELF} enters, create (a|one|two|three|four|\\d+) (?:[^.]*? )?creature tokens?\\b`, "i")); if (et && !/"[^"]*$/.test(o.slice(0, et.index))) r.etbTokens = LP_N[et[1].toLowerCase()] || Number(et[1]) || 1; }
   { const su = o.match(RX(`whenever (?:another|an?) ([A-Za-z]+) (?:you control )?enters(?: the battlefield)?(?: under your control)?, (?:you may )?untap ${SELF}\\b`, "i")); if (su && r.creature) r.selfUntapOn = su[1].toLowerCase(); }
   if (RX(`whenever ${SELF} becomes (?:untapped|tapped)`, "i").test(o)) r.tapTrig = true;
   if (RX(`whenever you gain life, untap ${SELF}\\b`, "i").test(o)) r.gainUntap = true;
-  { const rr = r.creature && o.match(RX(`when ${SELF} enters, (?:you may )?return (?:up to one )?target (creature|permanent) card(?: with mana value (\\d+) or less)? from your graveyard to the battlefield`, "i")); if (rr) r.etbReanim = { what: rr[1].toLowerCase(), mv: rr[2] ? Number(rr[2]) : 99 }; }
+  { const rr = r.creature && o.match(RX(`when ${SELF} enters, (?:you may )?return (?:up to one )?target (creature|permanent) card(?: with mana value (\\d+) or less)? from your graveyard to the battlefield`, "i")); if (rr && !/you lose life equal to/i.test(o)) r.etbReanim = { what: rr[1].toLowerCase(), mv: rr[2] ? Number(rr[2]) : 99 }; }
   { const pr = o.match(/whenever (?:a|another) (?:nontoken )?creature (?:you control )?is put into your graveyard from the battlefield, you may pay ((?:\{[^}]+\})+)\. if you do, return that card to the battlefield/i) || o.match(/whenever (?:a|another) nontoken creature is put into your graveyard from the battlefield, you may pay ((?:\{[^}]+\})+)\. if you do, return that card to the battlefield/i); if (pr) r.payReturn = { mv: lpMv(pr[1]), cost: pr[1] }; }
   if (r.creature && /you may cast this card from your graveyard as long as you control a zombie/i.test(o)) r.gyRet = { cost: c.m || "", zombie: true };
   { const gr = r.creature && o.match(/^((?:\{[^}]+\})+): return this card from your graveyard to the battlefield\.?$/im); if (gr) r.gyRet = { cost: gr[1] }; }
@@ -2959,7 +2970,8 @@ export function loopRoles(c) {
     const cost = m[1], eff = m[2];
     if (RX(`^remove a \\+1\\/\\+1 counter from ${SELF}$`, "i").test(cost) && RX(`^(?:${SELF}|it) deals 1 damage to any target`, "i").test(eff)) r.ctrPing = true;
     // free sacrifice outlet: "Sacrifice a creature: …" (no mana, no tap)
-    const sc = cost.match(/^(pay 1 life, )?sacrifice (a|another) (?:non-?token )?(creature|[A-Z][a-z]+)$/i);
+    const sc0 = cost.match(/^(pay 1 life, )?sacrifice (an?|another) (?:non-?token )?(creature|[A-Za-z]+)(?: or (?:an? )?(creature|[A-Za-z]+))?$/i);
+    const sc = sc0 && [sc0[0], sc0[1], sc0[2], /^creature$/i.test(sc0[3]) || /^creature$/i.test(sc0[4] || "") ? "creature" : sc0[3]];
     if (sc && sc[1]) { const sm = eff.match(/^add ((?:\{[WUBRGC]\})+)/i), any = /^add one mana of any color|^create a treasure token/i.test(eff); if ((sm || any) && !/once each turn/i.test(eff)) r.lifeSac = { another: /another/i.test(sc[2]), what: sc[3].toLowerCase(), mana: sm ? { n: (sm[1].match(/\{/g) || []).length, cols: [...new Set(sm[1].match(/[WUBRGC]/g))] } : { n: 1, cols: ["W", "U", "B", "R", "G"] } }; }
     else if (sc && !/\{/.test(cost) && !/once each turn|gains control of/i.test(eff)) { const sm = eff.match(/^add ((?:\{[WUBRGC]\})+)/i), any = /^add one mana of any color|^create a treasure token/i.test(eff);
       r.sac = { another: /another/i.test(sc[2]), what: sc[3].toLowerCase(), mana: sm ? { n: (sm[1].match(/\{/g) || []).length, cols: [...new Set(sm[1].match(/[WUBRGC]/g))] } : any ? { n: 1, cols: ["W", "U", "B", "R", "G"] } : null }; }
@@ -2969,6 +2981,8 @@ export function loopRoles(c) {
       if (/^you gain (?:\d+|one|two|three) life(?: for each [^.]+)?\.?$/i.test(eff)) r.tapGain = true; }
     { const q = cost.match(/^((?:\{[^}]+\})+), \{Q\}$/); if (q) r.qUntap = { mv: lpMv(q[1]), cols: lpCols(q[1]), cost: q[1], eff: eff.replace(/\.$/, "") }; }
     if (RX(`^sacrifice ${SELF}$`, "i").test(cost) && /^(?:you may )?(?:tap or )?untap target (?:creature|permanent)\.?$/i.test(eff)) r.sacUntap = true;
+    if (RX(`^(?:discard a card, )?sacrifice ${SELF}$`, "i").test(cost)) r.selfSac = true;
+    { const ms = cost.match(RX(`^((?:\\{[^}]+\\})+), sacrifice ${SELF}$`, "i")), ad = eff.match(/^add ((?:\{[WUBRGC]\})+)/i); if (ms && ad && (ad[1].match(/\{/g) || []).length >= lpMv(ms[1])) r.selfSac = true; }
     if (RX(`^sacrifice ${SELF}$`, "i").test(cost) && /^when target creature is put into your graveyard this turn, return that card to the battlefield/i.test(eff)) r.saffi = true;
     // mana: "{T}: Add {G}{G}", "{T}: Add {G} for each Elf you control", "{T}: Add two mana in any combination of colors"
     if (/^\{T\}(?:, (?:\{[^}]+\})+)?(?:, exert (?:this creature|it))?$/i.test(cost) && /\badd /i.test(eff) && !/spend this mana only|^add an amount|^if /i.test(eff)) {
@@ -2997,22 +3011,33 @@ export function loopFind(cards, count = null, opts = {}) {
   const R = cards.map(loopRoles), out = [], seen = new Set();
   const add = (pieces, feat, desc, extra = {}) => { const u = [...new Set(pieces)]; const k = u.slice().sort().join("+") + "|" + feat; if (seen.has(k)) return; seen.add(k); out.push({ key: `loop:${k}`, name: u.join(" + "), pieces: u, kind: "info", found: true, win: false, feats: [feat], desc, ...extra }); };
   const sacs = R.filter(x => x.sac);
-  const sacFits = (S, v) => { const s = S.sac; return (s.what === "creature" || new RegExp(`\\b${s.what}\\b`, "i").test(v.t)) && !(s.another && S.n === v.n); };
+  const outFor = (P, not = []) => P.selfSac ? [null] : sacs.filter(S => sacFits(S, P) && !not.includes(S.n));
+  const sacFits = (S, v) => { const s = S.sac; return (s.what === "creature" || s.what === "permanent" || new RegExp(`\\b${s.what}\\b`, "i").test(v.t)) && !(s.another && S.n === v.n); };
   for (const P of R.filter(x => x.persist || x.undying)) {
     const qOk = (w, c) => w === "colorless" ? c.m != null && !/[WUBRG]/.test(c.m) : /^non-?/.test(w) ? !new RegExp(`\\b${w.replace(/^non-?/, "")}\\b`, "i").test(c.t) : new RegExp(`\\b${w.replace(/s$/, "")}\\b`, "i").test(c.t);
     const fix = R.filter(x => x.n !== P.n && (P.persist ? x.noMinus || x.plusOnEnter === true || (x.plusOnEnter?.only && qOk(x.plusOnEnter.only, cards[R.indexOf(P)])) : x.noPlus));
     for (const X of fix) for (const S of sacs) { if (!sacFits(S, P)) continue;
       add([P.n, X.n, S.n], "Infinite death and enters triggers", `Sacrifice ${P.n} to ${S.n}; it comes back with ${P.persist ? "persist" : "undying"} and ${X.n} keeps the ${P.persist ? "-1/-1" : "+1/+1"} counter off, so it can do it again: infinite sacrifices, deaths and enters triggers (and whatever ${S.n} gives each time).`, { kind: "loop", run: { cardDies: P.n } }); }
   }
+  // undying + "enters with a -1/-1 counter" (Bloodied Ghost), persist + "enters with a +1/+1 counter": the counters cancel on the way back
+  for (const P of R.filter(x => x.creature && (x.minusEnter || x.plusEnterSelf))) {
+    const okG = g => g.n !== P.n && !(g.grantNot && RX(`\\b${g.grantNot}\\b`, "i").test(P.t));
+    const srcs = [...(P.minusEnter ? (P.undying ? [null] : R.filter(g => g.grantUndying && okG(g))).map(g => [g, "undying", "-1/-1"]) : []), ...(P.plusEnterSelf ? (P.persist ? [null] : R.filter(g => g.grantPersist && okG(g))).map(g => [g, "persist", "+1/+1"]) : [])];
+    for (const [G, kw, c] of srcs) for (const S of outFor(P)) add([P.n, ...(G ? [G.n] : []), ...(S && S.n !== P.n ? [S.n] : [])], "Infinite death and enters triggers", `Sacrifice ${P.n}${S ? (S.n === P.n ? " to itself" : ` to ${S.n}`) : " (it sacrifices itself)"}: it returns with ${kw}${G ? ` from ${G.n}` : ""}, and the ${c} counter it gets on entering cancels the new one, so it can come back again: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: P.n } }); }
   // persist + undying on the same creature: the +1/+1 and -1/-1 counters cancel, so it always comes back
   for (const G of R.filter(x => x.grantPersist || x.grantUndying)) for (const P of R.filter(x => x.n !== G.n && x.creature && (G.grantPersist ? x.undying : x.persist) && !(G.grantNot && new RegExp(`\\b${G.grantNot}\\b`, "i").test(x.t)))) for (const S of sacs) { if (!sacFits(S, P)) continue;
     add([G.n, P.n, S.n], "Infinite death and enters triggers", `${G.n} gives ${P.n} ${G.grantPersist ? "persist" : "undying"} on top of its own ${G.grantPersist ? "undying" : "persist"}: sacrifice it to ${S.n}, it comes back with one counter, and the next return cancels it, forever: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: P.n } }); }
+  for (const GP of R.filter(x => x.grantPersist)) for (const GU of R.filter(x => x.grantUndying && x.n !== GP.n)) for (const S of sacs) {
+    const okP = x => x.creature && x.n !== GP.n && x.n !== GU.n && !(GP.grantNot && RX(`\\b${GP.grantNot}\\b`, "i").test(x.t)) && !(GU.grantNot && RX(`\\b${GU.grantNot}\\b`, "i").test(x.t)) && sacFits(S, x);
+    const P = R.find(x => okP(x) && x.n === S.n) || R.find(x => okP(x) && x.n !== S.n); if (!P && cards[R.indexOf(GP)].live) continue;
+    add([GP.n, GU.n, S.n], "Infinite death and enters triggers", `${GP.n} gives persist and ${GU.n} gives undying: sacrifice ${P ? P.n : "another creature that gets both"} to ${S.n} and the two counters cancel out, so it always comes back: infinite sacrifices, deaths and enters triggers.`, P ? { kind: "loop", run: { cardDies: P.n } } : {}); }
   // Heliod + Walking Ballista: gaining life puts a +1/+1 counter, the counter pings with lifelink, which gains life…
   for (const G of R.filter(x => x.gainCounter != null)) for (const B of R.filter(x => x.ctrPing && x.creature)) {
     const reach = /target creature|each creature you control/.test(G.gainCounter) || G.n === B.n;
     if (!reach) continue;
     const ll = B.lifelink ? B : R.find(x => x.giveLifelink && (x.n !== B.n || /creatures you control/.test(x.giveLifelink)) && !(x.giveLifelink === "another target creature" && x.n === B.n));
-    if (!ll) continue;
+    if (!ll) { if (cards[R.indexOf(B)].live) continue; // deck list: it still works once the pinger has lifelink from anywhere
+      add([G.n, B.n], "Infinite damage and life", `If ${B.n} has lifelink (from any source): it removes a +1/+1 counter to deal 1 damage, you gain 1 life, and ${G.n} puts the counter back: infinite damage and life.`, { cond: true }); continue; }
     add([G.n, B.n, ll.n], "Infinite damage and life", `${B.n} removes a +1/+1 counter to deal 1 damage${ll.n === B.n ? " (it has lifelink)" : ` with lifelink from ${ll.n}`}; you gain 1 life, and ${G.n} puts the counter back: infinite damage and life.`, { win: true }); }
   // Niv-Mizzet + Curiosity: each card drawn deals damage, each damage to an opponent draws a card
   for (const X of R.filter(x => x.drawDmg)) for (const Y of R.filter(x => x.dmgDraw)) {
@@ -3056,15 +3081,16 @@ export function loopFind(cards, count = null, opts = {}) {
   for (const X of R.filter(x => x.creature && x.gainUntap && x.tapGain)) add([X.n], "Infinite lifegain", `${X.n} taps to gain life, and gaining life untaps it: infinite life and lifegain triggers.`);
   for (const X of R.filter(x => x.creature && x.tapTrig && x.tapUntap && !x.tapUntap.another && /creature|permanent/.test(x.tapUntap.what))) add([X.n], "Infinite tap and untap triggers", `${X.n} taps to untap itself, over and over: its "becomes tapped/untapped" ability triggers every time.`);
   // recursion: Saffi Eriksdotter + a creature whose entering returns Saffi + a free sacrifice outlet
-  for (const F of R.filter(x => x.saffi)) for (const G of R.filter(x => x.etbReanim && x.n !== F.n)) for (const S of sacs) {
-    const fc = cards[R.indexOf(F)]; if (lpMv(fc.m || "") > G.etbReanim.mv || !sacFits(S, G) || S.n === F.n) continue;
-    add([F.n, G.n, S.n], "Infinite death and enters triggers", `Sacrifice ${F.n} targeting ${G.n}, then sacrifice ${G.n} to ${S.n}: it comes back, and entering returns ${F.n} from your graveyard. Repeat: infinite sacrifices, deaths and enters triggers (two creatures die each time).`); }
+  for (const F of R.filter(x => x.saffi || x.grantReturn)) for (const G of R.filter(x => x.etbReanim && x.n !== F.n)) for (const S of sacs) {
+    const fc = cards[R.indexOf(F)]; if (lpMv(fc.m || "") > G.etbReanim.mv || !sacFits(S, G) || S.n === F.n || (F.grantReturn && !sacFits(S, F))) continue;
+    add([F.n, G.n, S.n], "Infinite death and enters triggers", F.saffi ? `Sacrifice ${F.n} targeting ${G.n}, then sacrifice ${G.n} to ${S.n}: it comes back, and entering returns ${F.n} from your graveyard. Repeat: infinite sacrifices, deaths and enters triggers (two creatures die each time).`
+      : `${F.n} enters and gives ${G.n} "when this dies, return it"; sacrifice ${F.n}, then ${G.n}, to ${S.n}: ${G.n} comes back and returns ${F.n}, which gives it the ability again. Repeat: infinite sacrifices, deaths and enters triggers (two creatures die each time).`, { kind: "loop", run: { cardDies: G.n, alsoDies: [F.n] } }); }
   // Nim Deathmantle: pay to return a creature that died, paid by a mana sacrifice outlet + mana the creature makes on entering
   for (const N of R.filter(x => x.payReturn)) for (const S of sacs.filter(x => x.sac.mana)) for (const M of R.filter(x => x.creature && (x.etbMana || x.etbLands || x.etbTokens) && x.n !== N.n && x.n !== S.n)) {
     if (!sacFits(S, M) || /\bToken\b/.test(M.t)) continue;
     const make = S.sac.mana.n * (1 + (M.etbTokens && S.sac.what === "creature" ? M.etbTokens : 0)) + (M.etbMana ? M.etbMana.n : M.etbLands || 0), cost = N.payReturn.mv;
     if (make < cost) continue;
-    add([N.n, S.n, M.n], make > cost ? "Infinite mana and death triggers" : "Infinite death and enters triggers", `Sacrifice ${M.n} to ${S.n} (${S.sac.mana.n} mana); ${N.n} returns it for ${N.payReturn.cost}, and it ${M.etbMana ? `adds ${M.etbMana.n} mana` : M.etbLands ? `untaps ${M.etbLands} lands` : `makes ${M.etbTokens === 1 ? "a creature token" : `${M.etbTokens} creature tokens`} to sacrifice too`} on entering: ${make > cost ? "more mana than it costs" : "it pays for itself"}${M.etbLands ? " (if your lands make the right colors)" : ""}. Repeat: infinite deaths and enters triggers.`, M.etbTokens ? {} : { kind: "loop", run: { cardDies: M.n } }); }
+    add([N.n, S.n, M.n], make > cost ? "Infinite mana and death triggers" : "Infinite death and enters triggers", `Sacrifice ${M.n} to ${S.n} (${S.sac.mana.n} mana); ${N.n} returns it for ${N.payReturn.cost}, and it ${M.etbMana ? `adds ${M.etbMana.n} mana` : M.etbLands ? `untaps ${M.etbLands} lands` : `makes ${M.etbTokens === 1 ? "a creature token" : `${M.etbTokens} creature tokens`} to sacrifice too`} on entering: ${make > cost ? "more mana than it costs" : "it pays for itself"}${M.etbLands ? " (if your lands make the right colors)" : ""}. Repeat: infinite deaths and enters triggers.`, { kind: "loop", run: { cardDies: M.n, ...(M.etbTokens && S.sac.what === "creature" ? { tokDies: M.etbTokens } : {}) } }); }
   // Gravecrawler + Phyrexian Altar: a creature you can bring back from the graveyard for what sacrificing it makes
   for (const G of R.filter(x => x.gyRet)) for (const S0 of R.filter(x => (x.sac || x.lifeSac) && x.n !== G.n)) {
     const S = S0.sac?.mana ? S0 : S0.lifeSac ? { ...S0, sac: S0.lifeSac } : S0; if (!sacFits(S, G)) continue;
@@ -3098,6 +3124,42 @@ export function loopFind(cards, count = null, opts = {}) {
     const cond = make == null ? ` (it needs ${M.mana.per}s: more than ${U.untap.mv} mana per tap)` : "";
     add([U.n, M.n], "Infinite mana", `Tap ${M.n} for ${make == null ? `mana for each ${M.mana.per}` : `${make} mana`}, pay ${U.untap.cost} to ${U.untap.attached ? `untap it with ${U.n} (attached to it)` : `untap it with ${U.n}`}: ${make == null ? "net mana each time" : `${make - U.untap.mv} extra mana each time`}, as often as you like${cond}.`, make == null ? { cond: true } : M.mana.cols.length === 1 ? { kind: "mana", sym: `{${M.mana.cols[0]}}` } : {});
   }
+  const pw = x => { const v = Number(cards[R.indexOf(x)]?.p); return Number.isFinite(v) ? v : null; };
+  // Luminous Broodmoth: a creature without flying comes back with a flying counter. With counters impossible (Solemnity,
+  // Melira's Keepers) it comes back every time; with persist or undying the two returns take turns, forever.
+  for (const F of R.filter(x => x.flyReturn)) {
+    const sol = R.find(x => x.noMinus && x.noPlus && !x.creature || x.noMinus && x.noPlus && x.n !== F.n);
+    const live = cards[R.indexOf(F)].live;
+    for (const P of R.filter(x => x.creature && !x.flying && x.n !== F.n)) {
+      const grant = !P.persist && !P.undying ? R.find(g => g.n !== P.n && (g.grantPersist || g.grantUndying) && !(g.grantNot && RX(`\\b${g.grantNot}\\b`, "i").test(P.t))) : null;
+      const how = P.noCtrSelf ? "self" : (P.persist || P.undying || P.onceBack || grant) ? "alt" : sol ? "sol" : null; if (!how) continue;
+      for (const S of outFor(P)) {
+        if (how === "sol" && !live && S && S.n !== P.n) continue; // deck list: Solemnity + Broodmoth + an outlet, below
+        const pieces = [F.n, P.n, ...(how === "sol" ? [sol.n] : []), ...(grant ? [grant.n] : []), ...(S && S.n !== P.n ? [S.n] : [])];
+        const kwd = P.persist ? "persist" : P.undying ? "undying" : P.onceBack ? "its own return" : grant ? (grant.grantPersist ? "persist" : "undying") : "";
+        add(pieces, "Infinite death and enters triggers", `Sacrifice ${P.n}${S ? (S.n === P.n ? " to itself" : ` to ${S.n}`) : " (it sacrifices itself)"}: ${how === "alt" ? `${F.n} returns it with a flying counter; the next time it has flying, so ${kwd}${grant ? ` from ${grant.n}` : ""} returns it instead, as a new creature without flying, and so on, forever` : `${F.n} returns it, and ${how === "sol" ? sol.n : "it"} keeps the flying counter off, so it comes back every time`}: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: P.n } }); } }
+    if (sol && !live) for (const S of sacs.filter(x => x.n !== sol.n && x.n !== F.n && /^(?:creature|permanent)$/.test(x.sac.what))) add([F.n, sol.n, S.n], "Infinite death and enters triggers", `${sol.n} stops ${F.n}'s flying counter, so any creature without flying you sacrifice to ${S.n} comes right back: infinite sacrifices, deaths and enters triggers.`);
+  }
+  // Reveillark + Karmic Guide: each returns the other (one when it leaves, one when it enters) + a free sacrifice outlet
+  for (const L of R.filter(x => x.ltbReanim)) {
+    const lOk = X => !L.ltbReanim.stat || (L.ltbReanim.stat === "p" ? pw(X) != null && pw(X) <= L.ltbReanim.max : lpMv(cards[R.indexOf(X)].m || "") <= L.ltbReanim.max);
+    const lmv = lpMv(cards[R.indexOf(L)].m || "");
+    for (const G of R.filter(x => x.creature && x.n !== L.n && /\bCreature\b/.test(String(x.t).split(" // ")[0]) && lOk(x))) {
+      if (G.etbReanim && G.etbReanim.mv >= lmv) for (const S of outFor(L, [G.n])) { if (S && !sacFits(S, G)) continue;
+        add([L.n, G.n, ...(S ? [S.n] : [])], "Infinite death and enters triggers", `Sacrifice ${G.n}, then ${L.n}${S ? ` to ${S.n}` : ""}: leaving, ${L.n} returns ${G.n}, and ${G.n} entering returns ${L.n}. Repeat: infinite sacrifices, deaths and enters triggers (two creatures die each time).`, { kind: "loop", run: { cardDies: G.n, alsoDies: [L.n] } }); }
+      if (G.etbBlink && !(G.etbBlink.not && RX(`\\b${G.etbBlink.not}\\b`, "i").test(L.t))) for (const S of outFor(G, [L.n]))
+        add([L.n, G.n, ...(S ? [S.n] : [])], "Infinite death and enters triggers", `${G.n} enters and blinks ${L.n}; with ${L.n}'s leave trigger waiting, sacrifice ${G.n}${S ? ` to ${S.n}` : ""}, and the trigger returns it. Repeat: infinite enters, leaves and death triggers.`, { kind: "loop", run: { cardDies: G.n } });
+      if (G.cloneGy && !L.ltbReanim.another) for (const S of outFor(G, [L.n]))
+        add([L.n, G.n, ...(S ? [S.n] : [])], "Infinite death and enters triggers", `With ${L.n} in your graveyard, ${G.n} enters as a copy of it; sacrifice it${S ? ` to ${S.n}` : ""} and the copied leave trigger returns ${G.n} itself (a small card in the graveyard), which copies ${L.n} again: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: G.n } }); } }
+  // a creature whose entering returns a creature card + something that brings that creature back each time
+  for (const G of R.filter(x => x.etbReanim && x.etbReanim.what !== "land")) {
+    const gmv = lpMv(cards[R.indexOf(G)].m || "");
+    // Fiend Hunter exiles it; sacrificing Fiend Hunter returns it, and it returns Fiend Hunter
+    for (const O of R.filter(x => x.oRing && x.n !== G.n && lpMv(cards[R.indexOf(x)].m || "") <= G.etbReanim.mv)) for (const S of outFor(O, [G.n]))
+      add([G.n, O.n, ...(S ? [S.n] : [])], "Infinite death and enters triggers", `${O.n} exiles ${G.n}; sacrifice ${O.n}${S ? ` to ${S.n}` : ""}: ${G.n} comes back and returns ${O.n}, which exiles it again. Repeat: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: O.n } });
+    // Kiki-Jiki copies it; sacrifice Kiki-Jiki and the hasty copy's enters trigger returns Kiki-Jiki
+    for (const K of R.filter(x => x.tapCopy && x.creature && x.n !== G.n && lpMv(cards[R.indexOf(x)].m || "") <= G.etbReanim.mv)) { if (K.tapCopy.nonleg && /\bLegendary\b/.test(G.t)) continue;
+      for (const S of outFor(K, [G.n])) add([K.n, G.n, ...(S ? [S.n] : [])], "Infinite hasty creature tokens", `${K.n} copies ${G.n}; sacrifice ${K.n}${S ? ` to ${S.n}` : ""}, and the copy entering returns it (it has haste), so it copies again: infinite hasty ${G.n} tokens, deaths and enters triggers.`, { kind: "tokens", tokenOf: G.n }); } }
   // Agatha's Soul Cauldron: creatures with +1/+1 counters get the activated abilities of the creature cards it exiled.
   // Try each exiled (deck: any) creature card's abilities on each creature that has (deck: could get) a counter.
   const ag = !opts.noAg && cards.find(c => /creatures you control with \+1\/\+1 counters on them have all activated abilities of all creature cards exiled with/i.test(c.o || ""));
@@ -3160,7 +3222,7 @@ export function deckCombos(names, cmds = [], lookup = null) {
   const nearList = [...near.entries()].map(([card, list]) => ({ card, combos: list.sort((a, b) => a.pieces.length - b.pieces.length) })).sort((a, b) => b.combos.length - a.combos.length);
   // loops the app works out from the card text, that Spellbook's list didn't already give
   // a double-faced card counts with both faces (it can transform into the piece that loops)
-  const loops = lookup ? loopFind(names.map(n => { const c = lookup(n); if (!c) return null; const back = c.faces?.[1]; return { n, o: [c.o || "", back?.o && back.o !== c.o ? back.o : ""].filter(Boolean).join("\n"), t: [c.t || "", back?.t || ""].filter(Boolean).join(" // "), m: c.m }; }).filter(Boolean)).filter(l => !fullMin.some(f => f.pieces.every(x => l.pieces.includes(x)))) : [];
+  const loops = lookup ? loopFind(names.map(n => { const c = lookup(n); if (!c) return null; const back = c.faces?.[1]; return { n, o: [c.o || "", back?.o && back.o !== c.o ? back.o : ""].filter(Boolean).join("\n"), t: [c.t || "", back?.t || ""].filter(Boolean).join(" // "), m: c.m, p: c.p ?? c.faces?.[0]?.p }; }).filter(Boolean)).filter(l => !fullMin.some(f => f.pieces.every(x => l.pieces.includes(x)))) : [];
   return { full: fullMin, near: nearList, loops };
 }
 // ----- Commander Brackets (Wizards of the Coast, beta; Game Changers as of the February 9, 2026 update, still current in October 2026) -----

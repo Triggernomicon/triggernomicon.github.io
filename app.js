@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, push, remove, query, orderByChild, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { firebaseConfig } from "./config.js?v=20261101a";
-import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261101a";
-import { permanentMatches, stationCard, singular } from "./engine.js?v=20261101a";
-import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261101a";
+import { firebaseConfig } from "./config.js?v=20261101b";
+import { playVictory, playKO, unlockAudio, playTurnChime } from "./sounds.js?v=20261101b";
+import { permanentMatches, stationCard, singular } from "./engine.js?v=20261101b";
+import { runEvents, countOf, abilitiesOf, describeAbilities, countsFor, isCreatureToken, noteTokenKind, entersTapped, spellAbility, activatedAbilities, TOKEN_USES, entersWithCounters, matchesSearch, manaValue, countTypes, clearAbilityCaches, entersInstead, activationCondition, suspendOf, winRule, evalWin, pactOf, loseEffect, damageLoses, overloadOf, addlSacOf, drawCount, counterOf, counterMatches, answerKind, staticRules, spellMatches, adjustCost, boardRules, permanentMatches as permMatch, oppPickOf, auraStealOf, devotion, tokenPerm, tokenPT, counterTokens, tidyTokenStacks, blanketLines, staticBuffs, ownKeywords, parseTargetFilter, attachBuff, grantedLand, enchantType, equipCost, sagaChapters, selfBuff, grantedMana, hitTriggers, myriadCount, setTypeAdds, vanishingOf, hasStorm, firebendingOf, foretellOf, isChangeling, changelingHas, bigHitTriggers, crewOf, detectCombos, gainAdj, setComboData, setComboNotes, deckCombos, bracketCheck, condBuffs } from "./engine.js?v=20261101b";
 
 // ---------- Settings ----------
 const START_LIFE = 40;
@@ -922,10 +922,10 @@ async function resetGame(code) {
 // Selfless Squire / Willbreaker trigger text (used by the card buttons and the trigger hooks)
 const SQUIRE_RE = /^(?:[^—\n]{1,40} — )?whenever damage that would be dealt to you is prevented, put that many \+1\/\+1 counters on (?:this creature|[^.]+)\.?$/im;
 const WILLB_RE = /^(?:[^—\n]{1,40} — )?whenever a creature an opponent controls becomes the target of a spell or ability you control, gain control of that creature/im;
-const APP_VERSION = "2026.11.01a";
+const APP_VERSION = "2026.11.01b";
 
 // Brand: the clasped tome emblem (original art) and the Triggernomicon wordmark
-const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261101a" alt="" aria-hidden="true">`; // the jeweled tome
+const TOME_SVG = `<img class="tome" src="tome-logo.svg?v=20261101b" alt="" aria-hidden="true">`; // the jeweled tome
 const WORDMARK = `<span class="wm-big">T</span>RIGGERNOMICON`;
 const FAN_NOTE = `Triggernomicon is unofficial Fan Content permitted under the <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC. Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Combo data from <a href="https://commanderspellbook.com" target="_blank" rel="noopener">Commander Spellbook</a> (<a href="./commander-spellbook-MIT.txt" target="_blank" rel="noopener">MIT license</a>). Creature types from <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a> (MIT license). Mana symbols: <a href="https://mana.andrewgioia.com" target="_blank" rel="noopener">Mana font</a> by Andrew Gioia (<a href="./mana-font-LICENSE.txt" target="_blank" rel="noopener">license</a>).`;
 // Combo list built from Commander Spellbook's bulk data; loaded after start-up so it never slows the first screen
@@ -4315,7 +4315,10 @@ function startController(code, pid) {
       if (sqK) { const nm = me.tokens[sqK].name; ev.push({ type: "sac", name: nm, n, token: true, creature: true }, { type: "dies", n, token: true });
         act(ev.splice(0), null, p => { let left = n; Object.keys(p.tokens || {}).filter(k => p.tokens[k].name === nm).forEach(k => { const t = p.tokens[k], d = Math.min(left, t.count); t.count -= d; left -= d; if (t.tapped > t.count) t.tapped = t.count; if (t.count <= 0) delete p.tokens[k]; }); }); } }
     if (r.dies) act([{ type: "dies", n, token: true }]);
-    if (r.cardDies) { act([{ type: "sac", name: r.cardDies, n, token: false, creature: true }, { type: "dies", n, token: false }]); reminders.push({ id: newId(), src: `♾ ${c.name}`, text: `${r.cardDies} died and came back ${n} times: apply its own enters trigger (and any other "enters" abilities) ${n} times.`, times: 1 }); }
+    if (r.cardDies) { const all = [r.cardDies, ...(r.alsoDies || [])];
+      act([...all.map(nm => ({ type: "sac", name: nm, n, token: false, creature: true })), { type: "dies", n: n * all.length, token: false }, ...(r.tokDies ? [{ type: "dies", n: n * r.tokDies, token: true }] : [])]); reminders.push({ id: newId(), src: `♾ ${c.name}`, text: `${r.cardDies} died and came back ${n} times: apply its own enters trigger (and any other "enters" abilities) ${n} times.`, times: 1 }); }
+    (r.alsoDies || []).forEach(nm => reminders.push({ id: newId(), src: `♾ ${c.name}`, text: `${nm} also died and came back ${n} times: apply its enters trigger ${n} times.`, times: 1 }));
+    if (r.tokDies) reminders.push({ id: newId(), src: `♾ ${c.name}`, text: `${n * r.tokDies} creature tokens were made and sacrificed too (their deaths are counted): apply any "whenever you sacrifice" or token-enters triggers by hand.`, times: 1 });
     if (r.create) act([{ type: "create", name: r.create.name, n, desc: r.create.desc, src: `♾ ${c.name}` }]);
     if (r.life) act([], p => { p.life = (p.life ?? START_LIFE) + r.life * n; });
     if (r.dropRem) setTimeout(() => { reminders = reminders.filter(x => !(x.src || "").startsWith(r.dropRem)); render(); }, 150); // the loop already did what these triggers ask
