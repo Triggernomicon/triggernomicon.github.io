@@ -2889,7 +2889,10 @@ export function detectCombos(p, lookup, ctx = {}) {
     const colors = () => new Set(ents.flatMap(x => /\bLand\b/.test(x.t) ? [] : (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []))).size;
     const count = w => w === "color" ? colors() : /^[a-z]+$/.test(w) ? countTypes(p, [w]) : null;
     const covered = l => out.some(c => (c.pieces || []).length && c.pieces.every(x => l.pieces.includes(x)));
-    loopFind(ents.map(x => ({ n: x.n, o: x.e.face != null && x.e.o ? x.e.o : x.o, t: x.e.face != null && x.e.t ? x.e.t : x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null, pair: x.e.pair ? (p.bf?.[x.e.pair]?.n || "?") : null })), count).filter(l => !covered(l)).forEach(l => out.push(l));
+    const lc = ents.map(x => ({ n: x.n, o: x.e.face != null && x.e.o ? x.e.o : x.o, t: x.e.face != null && x.e.t ? x.e.t : x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null, pair: x.e.pair ? (p.bf?.[x.e.pair]?.n || "?") : null }));
+    const lk = lc.map(c => `${c.n}|${c.att || ""}|${c.pair || ""}|${c.t}`).sort().join("#") + "#" + Object.values(p.tokens || {}).map(t => `${t.name}:${t.count}`).sort().join(",");
+    let found = LOOP_MEMO.get(lk); if (!found) { found = loopFind(lc, count); if (LOOP_MEMO.size > 60) LOOP_MEMO.clear(); LOOP_MEMO.set(lk, found); } // the board rarely changes between renders
+    found.filter(l => !covered(l)).forEach(l => out.push(l));
   }
   return out;
 }
@@ -2967,6 +2970,7 @@ export function loopRoles(c) {
 }
 const lpTypeOk = (r, what) => what === "permanent" || (what === "creature" ? r.creature : new RegExp(`\\b${what}\\b`, "i").test(r.t));
 // cards: [{ n, o, t }]; count(type) = how many of that type you control right now (live board), or null (deck list)
+const LOOP_MEMO = new Map();
 export function loopFind(cards, count = null) {
   const R = cards.map(loopRoles), out = [], seen = new Set();
   const add = (pieces, feat, desc, extra = {}) => { const u = [...new Set(pieces)]; const k = u.slice().sort().join("+") + "|" + feat; if (seen.has(k)) return; seen.add(k); out.push({ key: `loop:${k}`, name: u.join(" + "), pieces: u, kind: "info", found: true, win: false, feats: [feat], desc, ...extra }); };
