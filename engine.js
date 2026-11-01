@@ -2884,6 +2884,92 @@ export function detectCombos(p, lookup, ctx = {}) {
     out.push({ key: `named:${c.all.join("+")}`, name: c.all.join(" + "), pieces: c.all, win: c.win, kind: c.kind, desc: c.desc, ...(c.tokenOf ? { tokenOf: c.tokenOf } : {}) });
   });
   if (CSB && ctx.csb !== false) out.push(...csbFor(p, ctx, out));
+  // loops the app works out itself, when nothing above already covers the same cards
+  if (ctx.loops !== false) {
+    const colors = () => new Set(ents.flatMap(x => /\bLand\b/.test(x.t) ? [] : (String(lookup(x.n)?.m || x.e.m || "").match(/[WUBRG]/g) || []))).size;
+    const count = w => w === "color" ? colors() : /^[a-z]+$/.test(w) ? countTypes(p, [w]) : null;
+    const covered = l => out.some(c => (c.pieces || []).length && c.pieces.every(x => l.pieces.includes(x)));
+    loopFind(ents.map(x => ({ n: x.n, o: x.o, t: x.t, m: lookup(x.n)?.m ?? x.e.m, live: true, att: x.e.att ? (p.bf?.[x.e.att]?.n || "?") : null })), count).filter(l => !covered(l)).forEach(l => out.push(l));
+  }
+  return out;
+}
+
+// ----- Loops the app works out from card text (not from Spellbook's list) -----
+// Phase 1: persist / undying + a way to cancel the counter + a free sacrifice outlet; a mana source + something that untaps it for less
+// than it makes; "put a -1/-1 counter on this: untap it" (Devoted Druid) + something that stops -1/-1 counters.
+const LP_N = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
+const lpEsc = x => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const lpMv = cost => (String(cost).match(/\{[^}]+\}/g) || []).reduce((a, s) => { const v = s.slice(1, -1); return a + (/^\d+$/.test(v) ? Number(v) : /^[XYZ]$/.test(v) ? 0 : 1); }, 0);
+const lpCols = cost => (String(cost).match(/\{([WUBRG])(?:\/[WUBRGP])?\}/g) || []).map(s => s[1]);
+const loopRoleCache = new Map();
+export function loopRoles(c) {
+  const key = (c.n || "") + "|" + (c.o || ""); if (loopRoleCache.has(key)) return loopRoleCache.get(key);
+  const short = String(c.n || "").split(" // ")[0], first = short.split(",")[0];
+  const SELF = `(?:this creature|this artifact|this permanent|this land|it|${lpEsc(short)}|${lpEsc(first)})`;
+  const o = String(c.o || "").replace(/\s*\([^)]*\)/g, ""), t = c.t || "", lines = o.split("\n").map(l => l.trim().replace(/^[A-Z][A-Za-z' ]{2,30} — (?=\{|[A-Z])/, "")).filter(Boolean);
+  const r = { n: c.n, t, creature: /\bCreature\b/.test(t) };
+  if (r.creature && lines.some(l => /^persist\b/i.test(l))) r.persist = true;
+  if (r.creature && lines.some(l => /^undying\b/i.test(l))) r.undying = true;
+  if (/-1\/-1 counters would be put on (?:a creature|a permanent|creatures|permanents) you control, that many (?:-1\/-1 counters )?minus one/i.test(o) || /creatures you control can't have -1\/-1 counters put on them/i.test(o) || /^counters can't be put on (?:artifacts, creatures, enchantments, or lands|permanents)/im.test(o)) r.noMinus = true;
+  if (/^counters can't be put on (?:artifacts, creatures, enchantments, or lands|permanents)/im.test(o) || /\+1\/\+1 counters can't be put on (?:creatures|permanents)/i.test(o)) r.noPlus = true;
+  { const q = o.match(/\b(?:each (?:other )?|other )?((?:non-?)?[A-Za-z]+ )?(?:nontoken )?creatures? you control enters? (?:the battlefield )?with (?:an |one |two |three )?additional \+1\/\+1 counters?(?! on (?:it|them) for each)/i);
+    if (q && /"[^"]*$/.test(o.slice(0, q.index))) { /* inside a granted ability ("Commander creatures you own have "…"") */ }
+    else if (q) { const w = (q[1] || "").trim().toLowerCase(); if (!w || /^(?:each|other|nontoken)$/.test(w)) r.plusOnEnter = true; else r.plusOnEnter = { only: w }; } }
+  if (!r.plusOnEnter && (/whenever (?:a|another) (?:nontoken )?creature (?:you control )?enters(?: the battlefield)?(?: under your control)?(?: this turn)?, put (?:a|one|two) \+1\/\+1 counters? on (?:it|that creature|each creature you control)/i.test(o)
+    || /\b(?:nontoken )?creatures you control have riot\b/i.test(o))) r.plusOnEnter = true;
+  if (/\bother (?:non-?[a-z]+ )?creatures you control have persist\b|\bcreatures you control have persist\b/i.test(o)) r.grantPersist = true;
+  if (/\bother (?:non-?[a-z]+ )?creatures you control have undying\b|\bcreatures you control have undying\b/i.test(o)) r.grantUndying = true;
+  for (const l of lines) {
+    const m = l.match(/^([^:"]+?):\s*(.+)$/); if (!m) continue;
+    const cost = m[1], eff = m[2];
+    // free sacrifice outlet: "Sacrifice a creature: …" (no mana, no tap)
+    const sc = cost.match(/^sacrifice (a|another) (?:non-?token )?(creature|[A-Z][a-z]+)$/i);
+    if (sc && !/\{/.test(cost) && !/once each turn|gains control of/i.test(eff)) r.sac = { another: /another/i.test(sc[1]), what: sc[2].toLowerCase() };
+    // mana: "{T}: Add {G}{G}", "{T}: Add {G} for each Elf you control", "{T}: Add two mana in any combination of colors"
+    if (/^\{T\}(?:, (?:\{[^}]+\})+)?(?:, exert (?:this creature|it))?$/i.test(cost) && /\badd /i.test(eff) && !/spend this mana only|^add an amount|^if /i.test(eff)) {
+      const syms = (eff.match(/\badd ((?:\{[WUBRGC]\})+)/i) || [])[1];
+      const per = eff.match(/\bfor each ([a-z ]+?)(?:s? you control|s? on the battlefield|\b)/i) || eff.match(/\badd x mana [^,]*, where x is (?:the )?([^.]+)/i);
+      const any = eff.match(/^add (one|two|three|four|five|x) mana (?:of any (?:one )?color|in any combination of colors)/i);
+      const n = per ? null : syms ? (syms.match(/\{/g) || []).length : any ? LP_N[any[1].toLowerCase()] : 0;
+      const cols = any || /mana of (?:that|any) color|for each color/i.test(eff) ? ["W", "U", "B", "R", "G"] : (syms || "").match(/[WUBRGC]/g) || [];
+      const better = !r.mana || per && r.mana.n != null && r.mana.n < 2 || (n != null && r.mana.n != null && n - lpMv(cost.replace("{T}", "")) > r.mana.n);
+      if ((n || per) && better) { const mc = lpMv(cost.replace("{T}", "")); r.mana = { noGeneric: /can't be spent to pay generic/i.test(eff), n: n == null ? null : n - mc, per: per ? per[1].toLowerCase() : null, perN: per ? ((syms || "{x}").match(/\{/g) || []).length : 0, cols: [...new Set(cols)] }; }
+    }
+    // untap others: "{1}{G}: Untap target creature", Aura "{U}: Untap enchanted creature"
+    const ut = eff.match(/^untap (target|another target|enchanted|equipped) (creature|artifact|land|permanent)\.?$/i);
+    if (ut && /^(?:\{[^}]+\})+$/.test(cost) && !/\{T\}|\{Q\}/.test(cost)) r.untap = { mv: lpMv(cost), cols: lpCols(cost), what: ut[2].toLowerCase(), attached: /enchanted|equipped/i.test(ut[1]), cost };
+    // "Put a -1/-1 counter on this creature: Untap this creature."
+    if (new RegExp(`^put a -1\\/-1 counter on ${SELF}$`, "i").test(cost) && new RegExp(`^untap ${SELF}\\.?$`, "i").test(eff)) r.minusUntap = true;
+  }
+  loopRoleCache.set(key, r); return r;
+}
+const lpTypeOk = (r, what) => what === "permanent" || (what === "creature" ? r.creature : new RegExp(`\\b${what}\\b`, "i").test(r.t));
+// cards: [{ n, o, t }]; count(type) = how many of that type you control right now (live board), or null (deck list)
+export function loopFind(cards, count = null) {
+  const R = cards.map(loopRoles), out = [], seen = new Set();
+  const add = (pieces, feat, desc, extra = {}) => { const u = [...new Set(pieces)]; const k = u.slice().sort().join("+") + "|" + feat; if (seen.has(k)) return; seen.add(k); out.push({ key: `loop:${k}`, name: u.join(" + "), pieces: u, kind: "info", found: true, win: false, feats: [feat], desc, ...extra }); };
+  const sacs = R.filter(x => x.sac);
+  const sacFits = (S, v) => { const s = S.sac; return (s.what === "creature" || new RegExp(`\\b${s.what}\\b`, "i").test(v.t)) && !(s.another && S.n === v.n); };
+  for (const P of R.filter(x => x.persist || x.undying)) {
+    const qOk = (w, c) => w === "colorless" ? c.m != null && !/[WUBRG]/.test(c.m) : /^non-?/.test(w) ? !new RegExp(`\\b${w.replace(/^non-?/, "")}\\b`, "i").test(c.t) : new RegExp(`\\b${w.replace(/s$/, "")}\\b`, "i").test(c.t);
+    const fix = R.filter(x => x.n !== P.n && (P.persist ? x.noMinus || x.plusOnEnter === true || (x.plusOnEnter?.only && qOk(x.plusOnEnter.only, cards[R.indexOf(P)])) : x.noPlus));
+    for (const X of fix) for (const S of sacs) { if (!sacFits(S, P)) continue;
+      add([P.n, X.n, S.n], "Infinite death and enters triggers", `Sacrifice ${P.n} to ${S.n}; it comes back with ${P.persist ? "persist" : "undying"} and ${X.n} keeps the ${P.persist ? "-1/-1" : "+1/+1"} counter off, so it can do it again: infinite sacrifices, deaths and enters triggers (and whatever ${S.n} gives each time).`, { kind: "loop", run: { cardDies: P.n } }); }
+  }
+  // persist + undying on the same creature: the +1/+1 and -1/-1 counters cancel, so it always comes back
+  for (const G of R.filter(x => x.grantPersist || x.grantUndying)) for (const P of R.filter(x => x.n !== G.n && x.creature && (G.grantPersist ? x.undying : x.persist))) for (const S of sacs) { if (!sacFits(S, P)) continue;
+    add([G.n, P.n, S.n], "Infinite death and enters triggers", `${G.n} gives ${P.n} ${G.grantPersist ? "persist" : "undying"} on top of its own ${G.grantPersist ? "undying" : "persist"}: sacrifice it to ${S.n}, it comes back with one counter, and the next return cancels it, forever: infinite sacrifices, deaths and enters triggers.`, { kind: "loop", run: { cardDies: P.n } }); }
+  for (const D of R.filter(x => x.minusUntap && x.mana)) for (const X of R.filter(x => x.n !== D.n && x.noMinus))
+    add([D.n, X.n], "Infinite colored mana", `${D.n} taps for mana, then puts a -1/-1 counter on itself to untap; ${X.n} stops the counter, so it never dies: infinite mana.`, D.mana.cols.length === 1 ? { kind: "mana", sym: `{${D.mana.cols[0]}}` } : {});
+  for (const U of R.filter(x => x.untap)) for (const M of R.filter(x => x.mana && x.n !== U.n && lpTypeOk(x, U.untap.what))) {
+    { const uc = cards[R.indexOf(U)]; if (U.untap.attached && uc.live && uc.att !== M.n) continue; } // on the table, the Aura has to be on that creature
+    const make = M.mana.per ? (count ? count(M.mana.per) * M.mana.perN : null) : M.mana.n;
+    const colOk = U.untap.cols.every(cl => M.mana.cols.includes(cl)) && !(M.mana.noGeneric && U.untap.mv > U.untap.cols.length);
+    if (!colOk) continue;
+    if (make != null && make <= U.untap.mv) continue;
+    const cond = make == null ? ` (it needs ${M.mana.per}s: more than ${U.untap.mv} mana per tap)` : "";
+    add([U.n, M.n], "Infinite mana", `Tap ${M.n} for ${make == null ? `mana for each ${M.mana.per}` : `${make} mana`}, pay ${U.untap.cost} to ${U.untap.attached ? `untap it with ${U.n} (attached to it)` : `untap it with ${U.n}`}: ${make == null ? "net mana each time" : `${make - U.untap.mv} extra mana each time`}, as often as you like${cond}.`, make == null ? { cond: true } : M.mana.cols.length === 1 ? { kind: "mana", sym: `{${M.mana.cols[0]}}` } : {});
+  }
   return out;
 }
 
@@ -2904,7 +2990,7 @@ export function setComboData(data) {
 }
 export function setComboNotes(notes) { if (CSB && notes?.pre) { CSB.notes = notes.pre; CSB.memo.clear(); } }
 // Combos in a decklist: every piece in the deck (and must-be-commander pieces are its commander), plus the ones a single card away
-export function deckCombos(names, cmds = []) {
+export function deckCombos(names, cmds = [], lookup = null) {
   if (!CSB) return null;
   const have = new Set(names.map(csbNorm)), cm = new Set(cmds.map(csbNorm)), full = [], near = new Map(), seen = new Set();
   for (const n of have) for (const i of CSB.by.get(n) || []) {
@@ -2923,7 +3009,9 @@ export function deckCombos(names, cmds = []) {
   const sub = (a, b) => a.every(x => b.includes(x));
   const fullMin = full.filter(f => !full.some(g => g !== f && g.pieces.length < f.pieces.length && sub(g.pieces, f.pieces) && f.feats.every(x => g.feats.includes(x)))).sort((a, b) => a.pieces.length - b.pieces.length);
   const nearList = [...near.entries()].map(([card, list]) => ({ card, combos: list.sort((a, b) => a.pieces.length - b.pieces.length) })).sort((a, b) => b.combos.length - a.combos.length);
-  return { full: fullMin, near: nearList };
+  // loops the app works out from the card text, that Spellbook's list didn't already give
+  const loops = lookup ? loopFind(names.map(n => { const c = lookup(n); return c ? { n, o: c.o || "", t: c.t || "", m: c.m } : null; }).filter(Boolean)).filter(l => !fullMin.some(f => f.pieces.every(x => l.pieces.includes(x)))) : [];
+  return { full: fullMin, near: nearList, loops };
 }
 // ----- Commander Brackets (Wizards of the Coast, beta; Game Changers as of the February 9, 2026 update, still current in October 2026) -----
 export const GAME_CHANGERS = new Set(["Ad Nauseam", "Ancient Tomb", "Aura Shards", "Biorhythm", "Bolas's Citadel", "Braids, Cabal Minion", "Chrome Mox", "Coalition Victory", "Consecrated Sphinx", "Crop Rotation", "Cyclonic Rift", "Demonic Tutor", "Drannith Magistrate", "Enlightened Tutor", "Farewell", "Field of the Dead", "Fierce Guardianship", "Force of Will", "Gaea's Cradle", "Gamble", "Gifts Ungiven", "Glacial Chasm", "Grand Arbiter Augustin IV", "Grim Monolith", "Humility", "Imperial Seal", "Intuition", "Jeska's Will", "Lion's Eye Diamond", "Mana Vault", "Mishra's Workshop", "Mox Diamond", "Mystical Tutor", "Narset, Parter of Veils", "Natural Order", "Necropotence", "Notion Thief", "Opposition Agent", "Orcish Bowmasters", "Panoptic Mirror", "Rhystic Study", "Seedborn Muse", "Serra's Sanctum", "Smothering Tithe", "Survival of the Fittest", "Teferi's Protection", "Tergrid, God of Fright", "Thassa's Oracle", "The One Ring", "The Tabernacle at Pendrell Vale", "Underworld Breach", "Vampiric Tutor", "Worldly Tutor"]);
